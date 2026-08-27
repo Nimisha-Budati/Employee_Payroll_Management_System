@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Employee Dashboard</title>
+    <link rel="stylesheet" href="employee-dashboard.css">
+</head>
+
+<body>
+
+<div class="dashboard">
+
+    <aside class="sidebar">
+
+        <div class="logo">
+            <div class="logo-icon">P</div>
+            <div>
+                <h2>Payroll<span>Pro</span></h2>
+                <small>Employee Portal</small>
+            </div>
+        </div>
+
+        <nav>
+
+            <a class="nav-item active">
+                <span>⌂</span>
+                Dashboard
+            </a>
+
+            <a class="nav-item">
+                <span>👤</span>
+                My Profile
+            </a>
+
+            <a class="nav-item">
+                <span>📅</span>
+                Attendance
+            </a>
+
+            <a class="nav-item">
+                <span>🏖</span>
+                Leave Management
+            </a>
+
+            <a class="nav-item">
+                <span>🏠</span>
+                Work From Home
+            </a>
+
+            <a class="nav-item">
+                <span>⏰</span>
+                My Shift
+            </a>
+
+            <a class="nav-item">
+                <span>⌛</span>
+                Overtime
+            </a>
+
+            <a class="nav-item">
+                <span>💰</span>
+                Payroll
+            </a>
+
+            <a class="nav-item">
+                <span>📄</span>
+                Payslips
+            </a>
+
+            <a class="nav-item">
+                <span>📁</span>
+                Documents
+            </a>
+
+            <a class="nav-item">
+                <span>🗓</span>
+                Holidays
+            </a>
+
+            <a class="nav-item">
+                <span>🔔</span>
+                Notifications
+            </a>
+
+            <a class="nav-item">
+                <span>🤖</span>
+                AI Assistant
+            </a>
+
+        </nav>
+
+        <button class="logout-btn" onclick="logoutUser()">
+            ↪ Logout
+        </button>
+
+    </aside>
+
+
+    <main class="main">
+
+        <header>
+
+            <div>
+                <h1>Employee Dashboard</h1>
+                <p>Welcome back, <span id="username"></span> 👋</p>
+            </div>
+
+            <div class="profile">
+
+                <div class="avatar">
+                    👤
+                </div>
+
+                <div>
+                    <strong id="headerUsername"></strong>
+                    <small>Employee</small>
+                </div>
+
+            </div>
+
+        </header>
+
+
+        <section class="welcome-card">
+
+            <div>
+
+                <p>EMPLOYEE PORTAL</p>
+
+                <h2>Manage your work life in one place</h2>
+
+                <span>
+                    Attendance, leave, payroll, documents and more.
+                </span>
+
+            </div>
+
+            <div class="welcome-icon">
+                💼
+            </div>
+
+        </section>
+
+
+        <section class="stats">
+
+            <div class="stat-card">
+
+                <div class="stat-icon">
+                    📅
+                </div>
+
+                <div>
+                    <small>Attendance</small>
+                    <h3>--%</h3>
+                    <span>This Month</span>
+                </div>
+
+            </div>
+
+
+            <div class="stat-card">
+
+                <div class="stat-icon">
+                    🏖
+                </div>
+
+                <div>
+                    <small>Leave Balance</small>
+                    <h3>--</h3>
+                    <span>Days Available</span>
+                </div>
+
+            </div>
+
+
+            <div class="stat-card">
+
+                <div class="stat-icon">
+                    💰
+                </div>
+
+                <div>
+                    <small>Latest Salary</small>
+                    <h3>₹ --</h3>
+                    <span>Net Salary</span>
+                </div>
+
+            </div>
+
+
+            <div class="stat-card">
+
+                <div class="stat-icon">
+                    ⏰
+                </div>
+
+                <div>
+                    <small>Overtime</small>
+                    <h3>-- hrs</h3>
+                    <span>This Month</span>
+                </div>
+
+            </div>
+
+        </section>
+
+
+        <section class="bottom-grid">
+
+
+            <div class="panel">
+
+                <div class="panel-header">
+                    <h3>Quick Actions</h3>
+                </div>
+
+                <div class="actions">
+
+                    <button>
+                        <span>🟢</span>
+                        Mark Attendance
+                    </button>
+
+                    <button>
+                        <span>🏖</span>
+                        Apply Leave
+                    </button>
+
+                    <button>
+                        <span>🏠</span>
+                        Request WFH
+                    </button>
+
+                    <button>
+                        <span>📄</span>
+                        Download Payslip
+                    </button>
+
+                    <button>
+                        <span>📁</span>
+                        Upload Document
+                    </button>
+
+                    <button>
+                        <span>🤖</span>
+                        Ask AI Assistant
+                    </button>
+
+                </div>
+
+            </div>
+
+
+            <div class="panel">
+
+                <div class="panel-header">
+                    <h3>Attendance Today</h3>
+                </div>
+
+                <div class="attendance-box">
+
+                    <div>
+                        <small>Check In</small>
+                        <strong>--:--</strong>
+                    </div>
+
+                    <div>
+                        <small>Check Out</small>
+                        <strong>--:--</strong>
+                    </div>
+
+                    <div>
+                        <small>Working Hours</small>
+                        <strong>-- hrs</strong>
+                    </div>
+
+                </div>
+
+            </div>
+
+
+        </section>
+
+
+        <section class="bottom-grid">
+
+
+            <div class="panel">
+
+                <div class="panel-header">
+                    <h3>Recent Requests</h3>
+                </div>
+
+                <div class="request">
+
+                    <span>🏖</span>
+
+                    <div>
+                        <strong>Leave Request</strong>
+                        <small>No recent requests</small>
+                    </div>
+
+                </div>
+
+                <div class="request">
+
+                    <span>🏠</span>
+
+                    <div>
+                        <strong>WFH Request</strong>
+                        <small>No recent requests</small>
+                    </div>
+
+                </div>
+
+            </div>
+
+
+            <div class="panel">
+
+                <div class="panel-header">
+                    <h3>AI Insights 🤖</h3>
+                </div>
+
+                <div class="ai-box">
+
+                    <div class="ai-icon">
+                        🤖
+                    </div>
+
+                    <div>
+                        <strong>Your AI Assistant</strong>
+
+                        <p>
+                            Get insights about attendance,
+                            leave policies and salary.
+                        </p>
+
+                        <button>
+                            Ask Assistant →
+                        </button>
+                    </div>
+
+                </div>
+
+            </div>
+
+        </section>
+
+    </main>
+
+</div>
+
+
+<script>
+
+let username = localStorage.getItem("username");
+let role = localStorage.getItem("role");
+
+if (!username || role !== "EMPLOYEE") {
+    window.location.href = "index.html";
+}
+
+document.getElementById("username").innerText = username;
+document.getElementById("headerUsername").innerText = username;
+
+
+async function logoutUser() {
+
+    try {
+
+        await fetch(
+            "http://127.0.0.1:8000/api/logout/",
+            {
+                method: "POST",
+                credentials: "include"
+            }
+        );
+
+    } catch (error) {
+
+        console.log(error);
+
+    }
+
+    localStorage.clear();
+
+    window.location.href = "index.html";
+}
+
+</script>
+
+</body>
+</html>

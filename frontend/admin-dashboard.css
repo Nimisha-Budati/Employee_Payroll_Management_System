@@ -1,0 +1,409 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: Arial, sans-serif;
+    background: #f3f7f5;
+    color: #173b2d;
+    height: 100vh;
+    overflow: hidden;
+}
+
+.dashboard {
+    display: flex;
+    height: 100vh;
+}
+
+
+/* SIDEBAR */
+
+.sidebar {
+    width: 255px;
+    height: 100vh;
+    background: #123c2c;
+    color: white;
+    padding: 22px 16px;
+    display: flex;
+    flex-direction: column;
+}
+
+.logo {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    padding: 5px 10px 22px;
+}
+
+.logo-icon {
+    width: 42px;
+    height: 42px;
+    background: #2e8b63;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 21px;
+    font-weight: bold;
+}
+
+.logo h2 {
+    font-size: 19px;
+}
+
+.logo h2 span {
+    color: #70c99a;
+}
+
+.logo small {
+    color: #a9c5b8;
+    font-size: 10px;
+}
+
+
+/* NAVIGATION */
+
+nav {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.nav-item {
+    text-decoration: none;
+    color: #c2d7ce;
+    padding: 9px 11px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    font-size: 12px;
+    cursor: pointer;
+}
+
+.nav-item:hover {
+    background: #1c513d;
+    color: white;
+}
+
+.nav-item.active {
+    background: #2e8b63;
+    color: white;
+}
+
+.nav-item span {
+    width: 21px;
+    text-align: center;
+}
+
+
+/* LOGOUT */
+
+.logout-btn {
+    margin-top: auto;
+    border: none;
+    background: #1c513d;
+    color: #d5e7df;
+    padding: 11px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 13px;
+}
+
+.logout-btn:hover {
+    background: #2e8b63;
+}
+
+
+/* MAIN */
+
+.main {
+    flex: 1;
+    padding: 22px 30px;
+    overflow: hidden;
+}
+
+
+/* HEADER */
+
+header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 18px;
+}
+
+header h1 {
+    font-size: 26px;
+    color: #123c2c;
+}
+
+header p {
+    color: #71857c;
+    margin-top: 4px;
+    font-size: 13px;
+}
+
+.profile {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.profile .avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: #dceee5;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.profile strong {
+    display: block;
+    font-size: 13px;
+}
+
+.profile small {
+    color: #71857c;
+    font-size: 11px;
+}
+
+
+/* WELCOME */
+
+.welcome-card {
+    background: linear-gradient(110deg, #164c37, #287653);
+    border-radius: 14px;
+    color: white;
+    padding: 20px 25px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 16px;
+}
+
+.welcome-card p {
+    font-size: 9px;
+    letter-spacing: 1.5px;
+    color: #a9d9c0;
+    margin-bottom: 6px;
+}
+
+.welcome-card h2 {
+    font-size: 21px;
+    margin-bottom: 5px;
+}
+
+.welcome-card span {
+    color: #d1e8dc;
+    font-size: 12px;
+}
+
+.welcome-icon {
+    font-size: 45px;
+}
+
+
+/* STATISTICS */
+
+.stats {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 14px;
+    margin-bottom: 16px;
+}
+
+.stat-card {
+    background: white;
+    border-radius: 12px;
+    padding: 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    border: 1px solid #e0ebe5;
+}
+
+.stat-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 9px;
+    background: #e4f3eb;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+}
+
+.stat-card small {
+    color: #789087;
+    font-size: 10px;
+}
+
+.stat-card h3 {
+    margin-top: 3px;
+    font-size: 19px;
+    color: #174a35;
+}
+
+.stat-card span {
+    color: #91a098;
+    font-size: 9px;
+}
+
+
+/* ANALYTICS */
+
+.analytics-grid {
+    display: grid;
+    grid-template-columns: 1.4fr 1fr;
+    gap: 16px;
+    margin-bottom: 16px;
+}
+
+.panel {
+    background: white;
+    border: 1px solid #e0ebe5;
+    border-radius: 12px;
+    padding: 16px;
+}
+
+.panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid #e6eee9;
+    padding-bottom: 10px;
+    margin-bottom: 12px;
+}
+
+.panel-header h3 {
+    font-size: 14px;
+}
+
+.panel-header span {
+    color: #87978f;
+    font-size: 10px;
+}
+
+
+/* CHART */
+
+.chart-placeholder {
+    height: 90px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    color: #91a098;
+}
+
+.chart-icon {
+    font-size: 30px;
+    margin-bottom: 5px;
+}
+
+.chart-placeholder p {
+    font-size: 10px;
+}
+
+
+/* LEAVE STATS */
+
+.leave-stats {
+    display: flex;
+    justify-content: space-around;
+    text-align: center;
+    padding-top: 10px;
+}
+
+.leave-stats div {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.leave-stats strong {
+    font-size: 21px;
+    color: #246044;
+}
+
+.leave-stats small {
+    color: #84958d;
+    font-size: 10px;
+}
+
+
+/* BOTTOM */
+
+.bottom-grid {
+    display: grid;
+    grid-template-columns: 1.2fr 1fr;
+    gap: 16px;
+}
+
+
+/* ACTIONS */
+
+.actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 9px;
+}
+
+.actions button {
+    background: #f1f7f4;
+    border: 1px solid #dceae2;
+    border-radius: 8px;
+    padding: 11px 8px;
+    text-align: center;
+    color: #24543f;
+    cursor: pointer;
+    font-size: 10px;
+}
+
+.actions button:hover {
+    background: #e2f1e9;
+}
+
+.actions span {
+    display: block;
+    font-size: 17px;
+    margin-bottom: 5px;
+}
+
+
+/* PENDING */
+
+.pending-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 7px;
+    border-radius: 8px;
+    background: #f7faf8;
+    margin-bottom: 7px;
+}
+
+.pending-icon {
+    width: 32px;
+    height: 32px;
+    background: #e4f3eb;
+    border-radius: 7px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.pending-item strong {
+    display: block;
+    font-size: 11px;
+}
+
+.pending-item small {
+    color: #87978f;
+    font-size: 9px;
+}

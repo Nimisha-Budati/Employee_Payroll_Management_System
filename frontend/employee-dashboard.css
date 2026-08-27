@@ -1,0 +1,422 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: Arial, sans-serif;
+    background: #f3f7f5;
+    color: #173b2d;
+    height: 100vh;
+    overflow: hidden;
+}
+
+.dashboard {
+    display: flex;
+    height: 100vh;
+}
+
+
+/* SIDEBAR */
+
+.sidebar {
+    width: 255px;
+    height: 100vh;
+    background: #123c2c;
+    color: white;
+    padding: 22px 16px;
+    display: flex;
+    flex-direction: column;
+}
+
+.logo {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    padding: 5px 10px 22px;
+}
+
+.logo-icon {
+    width: 42px;
+    height: 42px;
+    background: #2e8b63;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 21px;
+    font-weight: bold;
+}
+
+.logo h2 {
+    font-size: 19px;
+}
+
+.logo h2 span {
+    color: #70c99a;
+}
+
+.logo small {
+    color: #a9c5b8;
+    font-size: 10px;
+}
+
+
+/* NAVIGATION */
+
+nav {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.nav-item {
+    text-decoration: none;
+    color: #c2d7ce;
+    padding: 9px 11px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    font-size: 12px;
+    cursor: pointer;
+}
+
+.nav-item:hover {
+    background: #1c513d;
+    color: white;
+}
+
+.nav-item.active {
+    background: #2e8b63;
+    color: white;
+}
+
+.nav-item span {
+    width: 21px;
+    text-align: center;
+}
+
+
+/* LOGOUT */
+
+.logout-btn {
+    margin-top: auto;
+    border: none;
+    background: #1c513d;
+    color: #d5e7df;
+    padding: 11px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 13px;
+}
+
+.logout-btn:hover {
+    background: #2e8b63;
+}
+
+
+/* MAIN */
+
+.main {
+    flex: 1;
+    padding: 22px 30px;
+    overflow: hidden;
+}
+
+
+/* HEADER */
+
+header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 18px;
+}
+
+header h1 {
+    font-size: 26px;
+    color: #123c2c;
+}
+
+header p {
+    color: #71857c;
+    margin-top: 4px;
+    font-size: 13px;
+}
+
+.profile {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.profile .avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: #dceee5;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.profile strong {
+    display: block;
+    font-size: 13px;
+}
+
+.profile small {
+    color: #71857c;
+    font-size: 11px;
+}
+
+
+/* WELCOME CARD */
+
+.welcome-card {
+    background: linear-gradient(110deg, #164c37, #287653);
+    border-radius: 14px;
+    color: white;
+    padding: 20px 25px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 16px;
+}
+
+.welcome-card p {
+    font-size: 9px;
+    letter-spacing: 1.5px;
+    color: #a9d9c0;
+    margin-bottom: 6px;
+}
+
+.welcome-card h2 {
+    font-size: 21px;
+    margin-bottom: 5px;
+}
+
+.welcome-card span {
+    color: #d1e8dc;
+    font-size: 12px;
+}
+
+.welcome-icon {
+    font-size: 45px;
+}
+
+
+/* STATISTICS */
+
+.stats {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 14px;
+    margin-bottom: 16px;
+}
+
+.stat-card {
+    background: white;
+    border-radius: 12px;
+    padding: 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    border: 1px solid #e0ebe5;
+}
+
+.stat-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 9px;
+    background: #e4f3eb;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+}
+
+.stat-card small {
+    color: #789087;
+    font-size: 10px;
+}
+
+.stat-card h3 {
+    margin-top: 3px;
+    font-size: 19px;
+    color: #174a35;
+}
+
+.stat-card span {
+    color: #91a098;
+    font-size: 9px;
+}
+
+
+/* BOTTOM GRID */
+
+.bottom-grid {
+    display: grid;
+    grid-template-columns: 1.2fr 1fr;
+    gap: 16px;
+    margin-bottom: 16px;
+}
+
+.panel {
+    background: white;
+    border: 1px solid #e0ebe5;
+    border-radius: 12px;
+    padding: 16px;
+    min-height: 160px;
+}
+
+.panel-header {
+    border-bottom: 1px solid #e6eee9;
+    padding-bottom: 10px;
+    margin-bottom: 12px;
+}
+
+.panel-header h3 {
+    font-size: 14px;
+}
+
+
+/* QUICK ACTIONS */
+
+.actions {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 9px;
+}
+
+.actions button {
+    background: #f1f7f4;
+    border: 1px solid #dceae2;
+    border-radius: 8px;
+    padding: 10px 7px;
+    text-align: center;
+    color: #24543f;
+    cursor: pointer;
+    font-size: 10px;
+}
+
+.actions button:hover {
+    background: #e2f1e9;
+}
+
+.actions span {
+    display: block;
+    font-size: 17px;
+    margin-bottom: 5px;
+}
+
+
+/* ATTENDANCE */
+
+.attendance-box {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    margin-top: 18px;
+}
+
+.attendance-box div {
+    background: #f5f9f7;
+    border-radius: 8px;
+    padding: 12px 7px;
+    text-align: center;
+}
+
+.attendance-box small {
+    display: block;
+    color: #87978f;
+    font-size: 9px;
+    margin-bottom: 5px;
+}
+
+.attendance-box strong {
+    font-size: 13px;
+    color: #24543f;
+}
+
+
+/* REQUESTS */
+
+.request {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px;
+    background: #f7faf8;
+    border-radius: 8px;
+    margin-bottom: 8px;
+}
+
+.request > span {
+    width: 32px;
+    height: 32px;
+    border-radius: 7px;
+    background: #e4f3eb;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.request strong {
+    display: block;
+    font-size: 11px;
+}
+
+.request small {
+    color: #87978f;
+    font-size: 9px;
+}
+
+
+/* AI ASSISTANT */
+
+.ai-box {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: #f1f7f4;
+    padding: 12px;
+    border-radius: 9px;
+}
+
+.ai-icon {
+    width: 40px;
+    height: 40px;
+    background: #dcefe5;
+    border-radius: 9px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 21px;
+}
+
+.ai-box strong {
+    font-size: 12px;
+}
+
+.ai-box p {
+    color: #71857c;
+    font-size: 9px;
+    margin: 4px 0 7px;
+}
+
+.ai-box button {
+    border: none;
+    background: #2e8b63;
+    color: white;
+    padding: 6px 10px;
+    border-radius: 6px;
+    font-size: 9px;
+    cursor: pointer;
+}
+
+.ai-box button:hover {
+    background: #246d4d;
+}

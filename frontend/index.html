@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Payroll Management System</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+<div class="page">
+
+    <div class="brand-section">
+
+        <div class="brand">
+            <div class="brand-icon">P</div>
+            <div>Payroll<span class="light">Pro</span></div>
+        </div>
+
+        <div class="brand-content">
+            <div class="tag">EMPLOYEE PAYROLL MANAGEMENT</div>
+
+            <h1>
+                Manage your workforce.
+                <span>Simply.</span>
+            </h1>
+
+            <p>
+                A secure and centralized platform for managing employees,
+                attendance, leave, payroll and more.
+            </p>
+
+            <div class="features">
+
+                <div class="feature">
+                    <div class="feature-icon">✓</div>
+                    <div>
+                        <strong>Secure Access</strong>
+                        <small>Protected employee information</small>
+                    </div>
+                </div>
+
+                <div class="feature">
+                    <div class="feature-icon">₹</div>
+                    <div>
+                        <strong>Payroll Management</strong>
+                        <small>Simple and accurate salary management</small>
+                    </div>
+                </div>
+
+                <div class="feature">
+                    <div class="feature-icon">⌁</div>
+                    <div>
+                        <strong>Easy Management</strong>
+                        <small>Everything in one place</small>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        <div class="copyright">
+            © 2026 PayrollPro
+        </div>
+
+    </div>
+
+
+    <div class="form-section">
+
+        <div class="form-card">
+
+            <div class="mobile-brand">
+                <div class="brand-icon">P</div>
+                PayrollPro
+            </div>
+
+
+            <!-- LOGIN -->
+
+            <div id="loginSection">
+
+                <div class="heading">
+                    <h2>Welcome back 👋</h2>
+                    <p>Sign in to continue to your account</p>
+                </div>
+
+
+                <div class="role-selection">
+
+                    <button
+                        type="button"
+                        id="employeeBtn"
+                        class="role active"
+                        onclick="selectRole('EMPLOYEE')">
+
+                        <span class="role-icon">👤</span>
+
+                        <div>
+                            <strong>Employee</strong>
+                            <small>Employee portal</small>
+                        </div>
+
+                        <span class="radio"></span>
+
+                    </button>
+
+
+                    <button
+                        type="button"
+                        id="adminBtn"
+                        class="role"
+                        onclick="selectRole('ADMIN')">
+
+                        <span class="role-icon">🛡</span>
+
+                        <div>
+                            <strong>Admin</strong>
+                            <small>Administration portal</small>
+                        </div>
+
+                        <span class="radio"></span>
+
+                    </button>
+
+                </div>
+
+
+                <div class="input-group">
+
+                    <label>Username</label>
+
+                    <div class="input-box">
+                        <span>👤</span>
+
+                        <input
+                            type="text"
+                            id="loginUsername"
+                            placeholder="Enter your username">
+                    </div>
+
+                </div>
+
+
+                <div class="input-group">
+
+                    <div class="label-row">
+                        <label>Password</label>
+                        <a href="#">Forgot password?</a>
+                    </div>
+
+                    <div class="input-box">
+
+                        <span>🔒</span>
+
+                        <input
+                            type="password"
+                            id="loginPassword"
+                            placeholder="Enter your password">
+
+                        <button
+                            type="button"
+                            class="eye"
+                            onclick="togglePassword('loginPassword', this)">
+                            ◉
+                        </button>
+
+                    </div>
+
+                </div>
+
+
+                <button
+                    type="button"
+                    class="submit-btn"
+                    onclick="login()">
+
+                    Sign In
+                    <span>→</span>
+
+                </button>
+
+
+                <div
+                    id="loginMessage"
+                    class="message">
+                </div>
+
+
+                <div class="divider">
+                    OR
+                </div>
+
+
+                <div class="switch">
+                    Don't have an account?
+
+                    <button
+                        type="button"
+                        onclick="showRegister()">
+                        Create account
+                    </button>
+                </div>
+
+            </div>
+
+
+            <!-- REGISTER -->
+
+            <div id="registerSection" style="display:none;">
+
+                <div class="heading">
+                    <h2>Create account</h2>
+                    <p>Register as an employee</p>
+                </div>
+
+
+                <div class="input-group">
+
+                    <label>Username</label>
+
+                    <div class="input-box">
+                        <span>👤</span>
+
+                        <input
+                            type="text"
+                            id="registerUsername"
+                            placeholder="Choose a username">
+                    </div>
+
+                </div>
+
+
+                <div class="input-group">
+
+                    <label>Email</label>
+
+                    <div class="input-box">
+                        <span>✉</span>
+
+                        <input
+                            type="email"
+                            id="registerEmail"
+                            placeholder="Enter your email">
+                    </div>
+
+                </div>
+
+
+                <div class="input-group">
+
+                    <label>Password</label>
+
+                    <div class="input-box">
+
+                        <span>🔒</span>
+
+                        <input
+                            type="password"
+                            id="registerPassword"
+                            placeholder="Create a password">
+
+                        <button
+                            type="button"
+                            class="eye"
+                            onclick="togglePassword('registerPassword', this)">
+                            ◉
+                        </button>
+
+                    </div>
+
+                </div>
+
+
+                <div class="input-group">
+
+                    <label>Confirm Password</label>
+
+                    <div class="input-box">
+
+                        <span>🔒</span>
+
+                        <input
+                            type="password"
+                            id="confirmPassword"
+                            placeholder="Confirm your password">
+
+                        <button
+                            type="button"
+                            class="eye"
+                            onclick="togglePassword('confirmPassword', this)">
+                            ◉
+                        </button>
+
+                    </div>
+
+                </div>
+
+
+                <button
+                    type="button"
+                    class="submit-btn"
+                    onclick="register()">
+
+                    Create Account
+                    <span>→</span>
+
+                </button>
+
+
+                <div
+                    id="registerMessage"
+                    class="message">
+                </div>
+
+
+                <div class="divider">
+                    OR
+                </div>
+
+
+                <div class="switch">
+
+                    Already have an account?
+
+                    <button
+                        type="button"
+                        onclick="showLogin()">
+                        Sign in
+                    </button>
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+
+<script src="script.js"></script>
+
+</body>
+</html>
