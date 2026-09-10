@@ -17,12 +17,25 @@ function selectRole(role) {
     } else {
         adminBtn.classList.add("active");
     }
+
+    const selectedRoleText = document.getElementById("selectedRoleText");
+    if (selectedRoleText) {
+        selectedRoleText.innerText =
+            role === "ADMIN" ? "Signing in as Administrator" : "Signing in as Employee";
+    }
+
+    const loginSubmitText = document.getElementById("loginSubmitText");
+    if (loginSubmitText) {
+        loginSubmitText.innerText =
+            role === "ADMIN" ? "Sign In as Administrator" : "Sign In as Employee";
+    }
 }
 
 
 function showRegister() {
     document.getElementById("loginSection").style.display = "none";
     document.getElementById("registerSection").style.display = "block";
+    document.getElementById("recoverySection").style.display = "none";
 
     const message = document.getElementById("registerMessage");
 
@@ -34,6 +47,7 @@ function showRegister() {
 
 function showLogin() {
     document.getElementById("registerSection").style.display = "none";
+    document.getElementById("recoverySection").style.display = "none";
     document.getElementById("loginSection").style.display = "block";
 
     const message = document.getElementById("loginMessage");
@@ -41,6 +55,13 @@ function showLogin() {
     if (message) {
         message.innerText = "";
     }
+}
+
+function showRecovery() {
+    document.getElementById("loginSection").style.display = "none";
+    document.getElementById("registerSection").style.display = "none";
+    document.getElementById("recoverySection").style.display = "block";
+    document.getElementById("recoveryMessage").innerText = "";
 }
 
 
@@ -67,6 +88,7 @@ async function register() {
 
     const confirmPassword =
         document.getElementById("confirmPassword").value;
+    const role = document.getElementById("registerRole").value;
 
     const message =
         document.getElementById("registerMessage");
@@ -99,7 +121,8 @@ async function register() {
                     username: username,
                     email: email,
                     password: password,
-                    confirm_password: confirmPassword
+                    confirm_password: confirmPassword,
+                    role: role
                 })
             }
         );
@@ -148,6 +171,7 @@ async function login() {
 
     const password =
         document.getElementById("loginPassword").value;
+    const rememberMe = document.getElementById("rememberMe").checked;
 
     const message =
         document.getElementById("loginMessage");
@@ -178,7 +202,8 @@ async function login() {
                 body: JSON.stringify({
                     username: username,
                     password: password,
-                    role: selectedRole
+                    role: selectedRole,
+                    remember_me: rememberMe
                 })
             }
         );
@@ -203,6 +228,8 @@ async function login() {
                 "role",
                 data.role
             );
+            localStorage.setItem("accessToken", data.access);
+            localStorage.setItem("refreshToken", data.refresh);
 
             setTimeout(function() {
 
@@ -233,6 +260,46 @@ async function login() {
     }
 }
 
+let recoveryResetToken = "";
+
+async function requestOTP() {
+    const message = document.getElementById("recoveryMessage");
+    const email = document.getElementById("recoveryEmail").value.trim();
+    if (!email) { message.innerText = "Enter your email or username."; return; }
+    const response = await fetch(API_URL + "/password/forgot/", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email }) });
+    const data = await response.json();
+    message.innerText = response.ok ? `${data.message} OTP: ${data.otp}` : (data.error || "Unable to generate OTP.");
+    message.style.color = response.ok ? "#176b45" : "#d9534f";
+}
+
+async function verifyOTP() {
+    const message = document.getElementById("recoveryMessage");
+    const email = document.getElementById("recoveryEmail").value.trim();
+    const otp = document.getElementById("recoveryOTP").value.trim();
+    const response = await fetch(API_URL + "/password/verify-otp/", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email, otp }) });
+    const data = await response.json();
+    recoveryResetToken = data.reset_token || "";
+    message.innerText = response.ok ? "OTP verified. Set your new password." : (data.error || "OTP verification failed.");
+    message.style.color = response.ok ? "#176b45" : "#d9534f";
+}
+
+async function resetPassword() {
+    const message = document.getElementById("recoveryMessage");
+    const password = document.getElementById("recoveryPassword").value;
+    const confirmPassword = document.getElementById("recoveryConfirmPassword").value;
+    const response = await fetch(API_URL + "/password/reset/", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ reset_token: recoveryResetToken, password, confirm_password: confirmPassword }) });
+    const data = await response.json();
+    message.innerText = response.ok ? "Password reset successfully. You can sign in now." : (data.error || "Password reset failed.");
+    message.style.color = response.ok ? "#176b45" : "#d9534f";
+    if (response.ok) setTimeout(showLogin, 900);
+}
+
+function googleLogin() {
+    const message = document.getElementById("loginMessage");
+    message.innerText = "Google authentication will be enabled after deployment.";
+    message.style.color = "#176b45";
+}
+
 
 async function logoutUser() {
     try {
@@ -249,6 +316,8 @@ async function logoutUser() {
 
     localStorage.removeItem("username");
     localStorage.removeItem("role");
+    localStorage.removeItem("accessToken");
+    localStorage.removeItem("refreshToken");
 
     window.location.href = "index.html";
 }

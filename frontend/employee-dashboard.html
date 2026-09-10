@@ -5,6 +5,34 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Employee Dashboard</title>
     <link rel="stylesheet" href="employee-dashboard.css">
+    <link rel="stylesheet" href="employee-navigation.css">
+    <script src="employee-navigation.js" defer></script>
+    <style>
+        .modal {
+            display: none; position: fixed; z-index: 1000; left: 0; top: 0;
+            width: 100%; height: 100%; background-color: rgba(0,0,0,0.5);
+            align-items: center; justify-content: center;
+        }
+        .modal.active { display: flex; }
+        .modal-content {
+            background: #fff; padding: 25px; border-radius: 8px; width: 100%; max-width: 500px;
+        }
+        .form-group { margin-bottom: 15px; }
+        .form-group label { display: block; margin-bottom: 5px; font-weight: bold; }
+        .form-group input, .form-group select, .form-group textarea {
+            width: 100%; padding: 8px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px;
+        }
+        .badge { padding: 4px 8px; border-radius: 4px; font-weight: bold; font-size: 0.85em; }
+        .badge-pending { background-color: #ffeeba; color: #856404; }
+        .badge-approved { background-color: #d4edda; color: #155724; }
+        .badge-rejected { background-color: #f8d7da; color: #721c24; }
+        .leave-table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+        .leave-table th, .leave-table td { border: 1px solid #ddd; padding: 10px; text-align: left; }
+        .leave-table th { background-color: #f4f6f9; }
+        .alert { padding: 10px; margin-bottom: 15px; border-radius: 4px; display: none; }
+        .alert-success { background: #d4edda; color: #155724; }
+        .alert-error { background: #f8d7da; color: #721c24; }
+    </style>
 </head>
 
 <body>
@@ -22,72 +50,37 @@
         </div>
 
         <nav>
-
-            <a class="nav-item active">
+            <a class="nav-item active" onclick="showTab('dashboard')">
                 <span>⌂</span>
                 Dashboard
             </a>
 
-            <a class="nav-item">
-                <span>👤</span>
-                My Profile
-            </a>
-
-            <a class="nav-item">
-                <span>📅</span>
-                Attendance
-            </a>
-
-            <a class="nav-item">
+            <a class="nav-item" onclick="showTab('leave')">
                 <span>🏖</span>
                 Leave Management
             </a>
-
-            <a class="nav-item">
-                <span>🏠</span>
+            <a class="nav-item" href="employee-attendance.html">
+                <span>&#128205;</span>
+                My Attendance
+            </a>
+            <a class="nav-item" href="employee-wfh.html">
+                <span>&#127968;</span>
                 Work From Home
             </a>
-
-            <a class="nav-item">
-                <span>⏰</span>
-                My Shift
+            <a class="nav-item" href="employee-documents.html">
+                <span>&#128196;</span>
+                My Documents
             </a>
 
-            <a class="nav-item">
-                <span>⌛</span>
-                Overtime
+            <a class="nav-item" href="employee-profile.html">
+                <span>&#128100;</span>
+                My Profile
             </a>
 
-            <a class="nav-item">
-                <span>💰</span>
-                Payroll
+            <a class="nav-item" href="employee-holidays.html">
+                <span>&#128197;</span>
+                Holiday Calendar
             </a>
-
-            <a class="nav-item">
-                <span>📄</span>
-                Payslips
-            </a>
-
-            <a class="nav-item">
-                <span>📁</span>
-                Documents
-            </a>
-
-            <a class="nav-item">
-                <span>🗓</span>
-                Holidays
-            </a>
-
-            <a class="nav-item">
-                <span>🔔</span>
-                Notifications
-            </a>
-
-            <a class="nav-item">
-                <span>🤖</span>
-                AI Assistant
-            </a>
-
         </nav>
 
         <button class="logout-btn" onclick="logoutUser()">
@@ -100,262 +93,138 @@
     <main class="main">
 
         <header>
-
             <div>
                 <h1>Employee Dashboard</h1>
                 <p>Welcome back, <span id="username"></span> 👋</p>
             </div>
 
             <div class="profile">
-
-                <div class="avatar">
-                    👤
-                </div>
-
+                <div id="dashboardAvatar" class="avatar" aria-label="Profile photo">👤</div>
                 <div>
                     <strong id="headerUsername"></strong>
                     <small>Employee</small>
                 </div>
-
             </div>
-
         </header>
 
-
-        <section class="welcome-card">
-
-            <div>
-
-                <p>EMPLOYEE PORTAL</p>
-
-                <h2>Manage your work life in one place</h2>
-
-                <span>
-                    Attendance, leave, payroll, documents and more.
-                </span>
-
-            </div>
-
-            <div class="welcome-icon">
-                💼
-            </div>
-
-        </section>
-
-
-        <section class="stats">
-
-            <div class="stat-card">
-
-                <div class="stat-icon">
-                    📅
-                </div>
-
+        <!-- DASHBOARD TAB -->
+        <div id="dashboardSection">
+            <section class="welcome-card">
                 <div>
-                    <small>Attendance</small>
-                    <h3>--%</h3>
-                    <span>This Month</span>
+                    <p>EMPLOYEE PORTAL</p>
+                    <h2>Manage your work life in one place</h2>
+                    <span>Attendance, leave, payroll, documents and more.</span>
                 </div>
+                <div class="welcome-icon">💼</div>
+            </section>
 
-            </div>
-
-
-            <div class="stat-card">
-
-                <div class="stat-icon">
-                    🏖
-                </div>
-
-                <div>
-                    <small>Leave Balance</small>
-                    <h3>--</h3>
-                    <span>Days Available</span>
-                </div>
-
-            </div>
-
-
-            <div class="stat-card">
-
-                <div class="stat-icon">
-                    💰
-                </div>
-
-                <div>
-                    <small>Latest Salary</small>
-                    <h3>₹ --</h3>
-                    <span>Net Salary</span>
-                </div>
-
-            </div>
-
-
-            <div class="stat-card">
-
-                <div class="stat-icon">
-                    ⏰
-                </div>
-
-                <div>
-                    <small>Overtime</small>
-                    <h3>-- hrs</h3>
-                    <span>This Month</span>
-                </div>
-
-            </div>
-
-        </section>
-
-
-        <section class="bottom-grid">
-
-
-            <div class="panel">
-
-                <div class="panel-header">
-                    <h3>Quick Actions</h3>
-                </div>
-
-                <div class="actions">
-
-                    <button>
-                        <span>🟢</span>
-                        Mark Attendance
-                    </button>
-
-                    <button>
-                        <span>🏖</span>
-                        Apply Leave
-                    </button>
-
-                    <button>
-                        <span>🏠</span>
-                        Request WFH
-                    </button>
-
-                    <button>
-                        <span>📄</span>
-                        Download Payslip
-                    </button>
-
-                    <button>
-                        <span>📁</span>
-                        Upload Document
-                    </button>
-
-                    <button>
-                        <span>🤖</span>
-                        Ask AI Assistant
-                    </button>
-
-                </div>
-
-            </div>
-
-
-            <div class="panel">
-
-                <div class="panel-header">
-                    <h3>Attendance Today</h3>
-                </div>
-
-                <div class="attendance-box">
-
+            <section class="stats">
+                <div class="stat-card">
+                    <div class="stat-icon">🏖</div>
                     <div>
-                        <small>Check In</small>
-                        <strong>--:--</strong>
+                        <small>Pending Leaves</small>
+                        <h3 id="dashPendingLeaves">0</h3>
+                        <span>Requests Awaiting Approval</span>
                     </div>
-
-                    <div>
-                        <small>Check Out</small>
-                        <strong>--:--</strong>
-                    </div>
-
-                    <div>
-                        <small>Working Hours</small>
-                        <strong>-- hrs</strong>
-                    </div>
-
                 </div>
 
-            </div>
-
-
-        </section>
-
-
-        <section class="bottom-grid">
-
-
-            <div class="panel">
-
-                <div class="panel-header">
-                    <h3>Recent Requests</h3>
-                </div>
-
-                <div class="request">
-
-                    <span>🏖</span>
-
+                <div class="stat-card">
+                    <div class="stat-icon">✅</div>
                     <div>
-                        <strong>Leave Request</strong>
-                        <small>No recent requests</small>
+                        <small>Approved Leaves</small>
+                        <h3 id="dashApprovedLeaves">0</h3>
+                        <span>Total Approved</span>
                     </div>
-
                 </div>
+            </section>
 
-                <div class="request">
-
-                    <span>🏠</span>
-
-                    <div>
-                        <strong>WFH Request</strong>
-                        <small>No recent requests</small>
+            <section class="bottom-grid">
+                <div class="panel">
+                    <div class="panel-header">
+                        <h3>Quick Actions</h3>
                     </div>
-
-                </div>
-
-            </div>
-
-
-            <div class="panel">
-
-                <div class="panel-header">
-                    <h3>AI Insights 🤖</h3>
-                </div>
-
-                <div class="ai-box">
-
-                    <div class="ai-icon">
-                        🤖
-                    </div>
-
-                    <div>
-                        <strong>Your AI Assistant</strong>
-
-                        <p>
-                            Get insights about attendance,
-                            leave policies and salary.
-                        </p>
-
-                        <button>
-                            Ask Assistant →
+                    <div class="actions">
+                        <button onclick="openApplyLeaveModal()">
+                            <span>🏖</span>
+                            Apply Leave
                         </button>
                     </div>
+                </div>
+            </section>
+        </div>
 
+        <!-- LEAVE MANAGEMENT TAB -->
+        <div id="leaveSection" style="display: none;">
+            <div class="panel" style="margin-top: 20px;">
+                <div class="panel-header" style="display: flex; justify-content: space-between; align-items: center;">
+                    <h3>My Leave Requests</h3>
+                    <button onclick="openApplyLeaveModal()" style="padding: 8px 16px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer;">+ Apply Leave</button>
                 </div>
 
-            </div>
+                <div id="leaveAlert" class="alert"></div>
 
-        </section>
+                <table class="leave-table">
+                    <thead>
+                        <tr>
+                            <th>Leave Type</th>
+                            <th>Start Date</th>
+                            <th>End Date</th>
+                            <th>Days</th>
+                            <th>Reason</th>
+                            <th>Status</th>
+                            <th>Applied Date</th>
+                        </tr>
+                    </thead>
+                    <tbody id="employeeLeaveTableBody">
+                        <tr><td colspan="7">Loading leave requests...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
 
     </main>
 
 </div>
 
+<!-- APPLY LEAVE MODAL -->
+<div id="leaveModal" class="modal">
+    <div class="modal-content">
+        <h3>Apply for Leave</h3>
+        <div id="modalAlert" class="alert"></div>
+        <form id="leaveForm" onsubmit="submitLeave(event)">
+            <div class="form-group">
+                <label>Leave Type</label>
+                <select id="leaveType" required>
+                    <option value="Casual Leave">Casual Leave</option>
+                    <option value="Sick Leave">Sick Leave</option>
+                    <option value="Earned Leave">Earned Leave</option>
+                    <option value="Other">Other</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Start Date</label>
+                <input type="date" id="startDate" required onchange="calculateDays()">
+            </div>
+            <div class="form-group">
+                <label>End Date</label>
+                <input type="date" id="endDate" required onchange="calculateDays()">
+            </div>
+            <div class="form-group">
+                <label>Calculated Days: <span id="numDaysDisplay">0</span></label>
+            </div>
+            <div class="form-group">
+                <label>Reason</label>
+                <textarea id="leaveReason" rows="3" required></textarea>
+            </div>
+            <div style="text-align: right;">
+                <button type="button" onclick="closeApplyLeaveModal()" style="padding: 8px 16px; background: #6c757d; color: white; border: none; border-radius: 4px; margin-right: 8px; cursor: pointer;">Cancel</button>
+                <button type="submit" style="padding: 8px 16px; background: #28a745; color: white; border: none; border-radius: 4px; cursor: pointer;">Submit Application</button>
+            </div>
+        </form>
+    </div>
+</div>
 
 <script>
-
 let username = localStorage.getItem("username");
 let role = localStorage.getItem("role");
 
@@ -366,30 +235,166 @@ if (!username || role !== "EMPLOYEE") {
 document.getElementById("username").innerText = username;
 document.getElementById("headerUsername").innerText = username;
 
-
-async function logoutUser() {
-
+async function loadDashboardProfilePhoto() {
     try {
-
-        await fetch(
-            "http://127.0.0.1:8000/api/logout/",
-            {
-                method: "POST",
-                credentials: "include"
-            }
-        );
-
+        const response = await fetch("http://127.0.0.1:8000/api/profile/", { credentials: "include" });
+        const profile = await response.json();
+        if (!response.ok || !profile.profile_photo_url) return;
+        const avatar = document.getElementById("dashboardAvatar");
+        avatar.textContent = "";
+        avatar.style.backgroundImage = `url("${profile.profile_photo_url}")`;
+        avatar.style.backgroundSize = "cover";
+        avatar.style.backgroundPosition = "center";
     } catch (error) {
+        console.warn("Unable to load profile photo.");
+    }
+}
 
-        console.log(error);
+loadDashboardProfilePhoto();
 
+function showTab(tab) {
+    if (tab === 'dashboard') {
+        document.getElementById("dashboardSection").style.display = "block";
+        document.getElementById("leaveSection").style.display = "none";
+    } else {
+        document.getElementById("dashboardSection").style.display = "none";
+        document.getElementById("leaveSection").style.display = "block";
+        loadEmployeeLeaves();
+    }
+}
+
+function openApplyLeaveModal() {
+    showTab('leave');
+    document.getElementById("leaveModal").classList.add("active");
+}
+
+function closeApplyLeaveModal() {
+    document.getElementById("leaveModal").classList.remove("active");
+    document.getElementById("leaveForm").reset();
+    document.getElementById("numDaysDisplay").innerText = "0";
+    document.getElementById("modalAlert").style.display = "none";
+}
+
+function calculateDays() {
+    let start = new Date(document.getElementById("startDate").value);
+    let end = new Date(document.getElementById("endDate").value);
+    if (!isNaN(start) && !isNaN(end)) {
+        let diff = Math.floor((end - start) / (1000 * 60 * 60 * 24)) + 1;
+        document.getElementById("numDaysDisplay").innerText = diff > 0 ? diff : 0;
+    }
+}
+
+async function loadEmployeeLeaves() {
+    try {
+        let response = await fetch("http://127.0.0.1:8000/api/leaves/", {
+            method: "GET",
+            headers: { "Content-Type": "application/json" },
+            credentials: "include"
+        });
+        if (response.ok) {
+            let data = await response.json();
+            renderTable(data);
+        } else {
+            document.getElementById("employeeLeaveTableBody").innerHTML = `<tr><td colspan="7">Failed to load leaves.</td></tr>`;
+        }
+    } catch (e) {
+        console.error(e);
+    }
+}
+
+function renderTable(data) {
+    let tbody = document.getElementById("employeeLeaveTableBody");
+    tbody.innerHTML = "";
+    
+    let pendingCount = 0;
+    let approvedCount = 0;
+
+    if (data.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="7">No leave requests found.</td></tr>`;
+        return;
     }
 
-    localStorage.clear();
+    data.forEach(item => {
+        if (item.status === 'PENDING') pendingCount++;
+        if (item.status === 'APPROVED') approvedCount++;
 
+        let badgeClass = 'badge-pending';
+        if (item.status === 'APPROVED') badgeClass = 'badge-approved';
+        if (item.status === 'REJECTED') badgeClass = 'badge-rejected';
+
+        let rejText = item.status === 'REJECTED' && item.rejection_reason ? `<br><small style="color:red">Reason: ${item.rejection_reason}</small>` : '';
+
+        let row = `<tr>
+            <td>${item.leave_type}</td>
+            <td>${item.start_date}</td>
+            <td>${item.end_date}</td>
+            <td>${item.number_of_days}</td>
+            <td>${item.reason}</td>
+            <td><span class="badge ${badgeClass}">${item.status}</span>${rejText}</td>
+            <td>${new Date(item.applied_at).toLocaleDateString()}</td>
+        </tr>`;
+        tbody.innerHTML += row;
+    });
+
+    document.getElementById("dashPendingLeaves").innerText = pendingCount;
+    document.getElementById("dashApprovedLeaves").innerText = approvedCount;
+}
+
+async function submitLeave(event) {
+    event.preventDefault();
+    let leave_type = document.getElementById("leaveType").value;
+    let start_date = document.getElementById("startDate").value;
+    let end_date = document.getElementById("endDate").value;
+    let reason = document.getElementById("leaveReason").value;
+
+    let alertDiv = document.getElementById("modalAlert");
+    alertDiv.style.display = "none";
+
+    if (new Date(end_date) < new Date(start_date)) {
+        alertDiv.className = "alert alert-error";
+        alertDiv.innerText = "End date cannot be before start date.";
+        alertDiv.style.display = "block";
+        return;
+    }
+
+    try {
+        let response = await fetch("http://127.0.0.1:8000/api/leaves/", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "include",
+            body: JSON.stringify({ leave_type, start_date, end_date, reason })
+        });
+
+        let data = await response.json();
+        if (response.ok) {
+            closeApplyLeaveModal();
+            loadEmployeeLeaves();
+            let mainAlert = document.getElementById("leaveAlert");
+            mainAlert.className = "alert alert-success";
+            mainAlert.innerText = "Leave request submitted successfully!";
+            mainAlert.style.display = "block";
+        } else {
+            let errMsg = data.detail || data.non_field_errors || data.end_date || "Error submitting request.";
+            alertDiv.className = "alert alert-error";
+            alertDiv.innerText = Array.isArray(errMsg) ? errMsg[0] : errMsg;
+            alertDiv.style.display = "block";
+        }
+    } catch (e) {
+        alertDiv.className = "alert alert-error";
+        alertDiv.innerText = "Network error occurred.";
+        alertDiv.style.display = "block";
+    }
+}
+
+async function logoutUser() {
+    try {
+        await fetch("http://127.0.0.1:8000/api/logout/", { method: "POST", credentials: "include" });
+    } catch (error) { console.log(error); }
+    localStorage.clear();
     window.location.href = "index.html";
 }
 
+loadEmployeeLeaves();
 </script>
 
 </body>

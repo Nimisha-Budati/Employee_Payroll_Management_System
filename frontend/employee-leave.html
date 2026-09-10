@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Leave Management - PayrollPro</title>
+    <link rel="stylesheet" href="employee-leave.css">
+</head>
+
+<body>
+
+<div class="dashboard">
+
+    <aside class="sidebar">
+
+        <div class="logo">
+            <div class="logo-icon">P</div>
+            <div>
+                <h2>Payroll<span>Pro</span></h2>
+                <small>Employee Portal</small>
+            </div>
+        </div>
+
+        <nav>
+
+            <a class="nav-item" href="employee-dashboard.html">
+                <span>⌂</span>
+                Dashboard
+            </a>
+
+            <a class="nav-item">
+                <span>👤</span>
+                My Profile
+            </a>
+
+            <a class="nav-item">
+                <span>📅</span>
+                Attendance
+            </a>
+
+            <a class="nav-item active" href="employee-leave.html">
+                <span>🏖</span>
+                Leave Management
+            </a>
+
+            <a class="nav-item">
+                <span>🏠</span>
+                Work From Home
+            </a>
+
+            <a class="nav-item">
+                <span>⏰</span>
+                My Shift
+            </a>
+
+            <a class="nav-item">
+                <span>⌛</span>
+                Overtime
+            </a>
+
+            <a class="nav-item">
+                <span>💰</span>
+                Payroll
+            </a>
+
+            <a class="nav-item">
+                <span>📄</span>
+                Payslips
+            </a>
+
+            <a class="nav-item">
+                <span>📁</span>
+                Documents
+            </a>
+
+            <a class="nav-item">
+                <span>🗓</span>
+                Holidays
+            </a>
+
+            <a class="nav-item">
+                <span>🔔</span>
+                Notifications
+            </a>
+
+            <a class="nav-item">
+                <span>🤖</span>
+                AI Assistant
+            </a>
+
+        </nav>
+
+        <button class="logout-btn" onclick="logoutUser()">
+            ↪ Logout
+        </button>
+
+    </aside>
+
+
+    <main class="main">
+
+        <header>
+
+            <div>
+                <h1>Leave Management</h1>
+                <p>Apply for leave and track your requests</p>
+            </div>
+
+            <div class="profile">
+
+                <div class="avatar">
+                    👤
+                </div>
+
+                <div>
+                    <strong id="headerUsername"></strong>
+                    <small>Employee</small>
+                </div>
+
+            </div>
+
+        </header>
+
+
+        <section class="content-grid">
+
+            <!-- APPLY LEAVE -->
+
+            <div class="panel">
+
+                <div class="panel-header">
+                    <div>
+                        <h3>Apply for Leave</h3>
+                        <p>Submit a new leave request</p>
+                    </div>
+                </div>
+
+
+                <form id="leaveForm">
+
+                    <div class="input-group">
+
+                        <label for="leaveType">
+                            Leave Type
+                        </label>
+
+                        <select id="leaveType" required>
+
+                            <option value="">
+                                Select Leave Type
+                            </option>
+
+                            <option value="CASUAL">
+                                Casual Leave
+                            </option>
+
+                            <option value="SICK">
+                                Sick Leave
+                            </option>
+
+                            <option value="EARNED">
+                                Earned Leave
+                            </option>
+
+                            <option value="OTHER">
+                                Other
+                            </option>
+
+                        </select>
+
+                    </div>
+
+
+                    <div class="date-grid">
+
+                        <div class="input-group">
+
+                            <label for="startDate">
+                                Start Date
+                            </label>
+
+                            <input
+                                type="date"
+                                id="startDate"
+                                required
+                            >
+
+                        </div>
+
+
+                        <div class="input-group">
+
+                            <label for="endDate">
+                                End Date
+                            </label>
+
+                            <input
+                                type="date"
+                                id="endDate"
+                                required
+                            >
+
+                        </div>
+
+                    </div>
+
+
+                    <div class="input-group">
+
+                        <label for="numberOfDays">
+                            Number of Days
+                        </label>
+
+                        <input
+                            type="text"
+                            id="numberOfDays"
+                            placeholder="Automatically calculated"
+                            readonly
+                        >
+
+                    </div>
+
+
+                    <div class="input-group">
+
+                        <label for="reason">
+                            Reason
+                        </label>
+
+                        <textarea
+                            id="reason"
+                            rows="5"
+                            placeholder="Enter reason for leave..."
+                            required
+                        ></textarea>
+
+                    </div>
+
+
+                    <div id="leaveMessage"></div>
+
+
+                    <button
+                        type="submit"
+                        class="submit-btn"
+                    >
+                        Submit Leave Request
+                    </button>
+
+                </form>
+
+            </div>
+
+
+            <!-- LEAVE SUMMARY -->
+
+            <div class="panel summary-panel">
+
+                <div class="panel-header">
+                    <h3>Leave Summary</h3>
+                </div>
+
+                <div class="summary-card">
+
+                    <span>⏳</span>
+
+                    <div>
+                        <small>Pending Requests</small>
+                        <strong id="pendingCount">0</strong>
+                    </div>
+
+                </div>
+
+
+                <div class="summary-card">
+
+                    <span>✅</span>
+
+                    <div>
+                        <small>Approved Requests</small>
+                        <strong id="approvedCount">0</strong>
+                    </div>
+
+                </div>
+
+
+                <div class="summary-card">
+
+                    <span>❌</span>
+
+                    <div>
+                        <small>Rejected Requests</small>
+                        <strong id="rejectedCount">0</strong>
+                    </div>
+
+                </div>
+
+            </div>
+
+        </section>
+
+
+        <!-- MY LEAVE REQUESTS -->
+
+        <section class="panel requests-panel">
+
+            <div class="panel-header">
+
+                <div>
+                    <h3>My Leave Requests</h3>
+                    <p>View the status of your submitted requests</p>
+                </div>
+
+                <button
+                    class="refresh-btn"
+                    onclick="loadLeaveRequests()"
+                >
+                    ↻ Refresh
+                </button>
+
+            </div>
+
+
+            <div class="table-container">
+
+                <table>
+
+                    <thead>
+
+                        <tr>
+                            <th>Leave Type</th>
+                            <th>Start Date</th>
+                            <th>End Date</th>
+                            <th>Days</th>
+                            <th>Reason</th>
+                            <th>Status</th>
+                            <th>Applied On</th>
+                        </tr>
+
+                    </thead>
+
+                    <tbody id="leaveTableBody">
+
+                        <tr>
+
+                            <td colspan="7" class="loading">
+                                Loading leave requests...
+                            </td>
+
+                        </tr>
+
+                    </tbody>
+
+                </table>
+
+            </div>
+
+        </section>
+
+    </main>
+
+</div>
+
+
+<script src="employee-leave.js"></script>
+
+</body>
+</html>

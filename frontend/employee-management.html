@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Employee Management</title>
+  <link rel="stylesheet" href="admin-dashboard.css">
+</head>
+<body>
+  <div class="dashboard">
+    <aside class="sidebar">
+      <div class="logo"><div class="logo-icon">P</div><div><h2>Payroll<span>Pro</span></h2><small>Admin Portal</small></div></div>
+      <nav><a class="nav-item" href="admin-dashboard.html">Dashboard</a><a class="nav-item active" href="employee-management.html">Employee Management</a></nav>
+      <button class="logout-btn" onclick="logoutUser()">↪ Logout</button>
+    </aside>
+    <main class="main">
+      <header class="page-header"><h1>Employee Management</h1><p>Add, update, or deactivate employee accounts.</p></header>
+      <section class="panel">
+        <h2 class="panel-title">Add employee</h2>
+        <div id="message" class="alert"></div>
+        <form id="employeeForm" class="form-grid">
+          <input name="username" placeholder="Username" required>
+          <input name="email" type="email" placeholder="Email" required>
+          <input name="password" type="password" placeholder="Temporary password" required>
+          <input name="employee_id" placeholder="Employee ID" required>
+          <input name="phone" placeholder="Phone" required>
+          <input name="department" placeholder="Department" required>
+          <input name="designation" placeholder="Designation" required>
+          <input name="joining_date" type="date" required>
+          <button class="primary-btn" type="submit">Add employee</button>
+        </form>
+      </section>
+      <section class="panel table-wrap"><h2 class="panel-title">Employees</h2><table><thead><tr><th>ID</th><th>Name</th><th>Department</th><th>Status</th><th>Action</th></tr></thead><tbody id="employeeRows"></tbody></table></section>
+    </main>
+  </div>
+  <script src="employee-management.js"></script>
+</body>
+</html>
