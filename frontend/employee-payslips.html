@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f4f8f6">
+  <script src="js/theme.js"></script>
+  <title>Payslips · PayrollPro</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+<main id="content">
+  <div class="page-header">
+    <div><h1>Payslips</h1><p>Your finalised payslips.</p></div>
+    <div class="page-actions" id="actions"></div>
+  </div>
+  <section class="grid grid-3" id="stats"></section>
+  <section class="card" style="margin-top:20px">
+    <div class="toolbar"><select class="select" id="year" aria-label="Year"></select></div>
+    <div class="table-wrap"><table class="table"><thead><tr><th>Month</th><th class="right">Gross</th><th class="right">Deductions</th><th class="right">Net</th><th>Paid on</th><th class="right">Actions</th></tr></thead><tbody id="rows"></tbody></table></div>
+  </section>
+</main>
+<script src="js/app.js"></script>
+<script src="js/payslip-view.js"></script>
+<script src="js/my-payslips.js"></script>
+</body>
+</html>

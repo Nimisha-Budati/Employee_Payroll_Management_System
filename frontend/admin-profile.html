@@ -1,1 +1,45 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Administrator Profile</title><link rel="stylesheet" href="profile.css"></head><body data-role="ADMIN"><div class="dashboard"><aside class="sidebar"><div class="logo"><div class="logo-icon">P</div><div><h2>Payroll<span>Pro</span></h2><small>Admin Portal</small></div></div><nav><a class="nav-item" href="admin-dashboard.html"><span class="nav-icon">&#8962;</span>Dashboard</a><a class="nav-item" href="admin-dashboard.html"><span class="nav-icon">&#128197;</span>Leave Management</a><a class="nav-item" href="admin-documents.html"><span class="nav-icon">&#128196;</span>Document Review</a><a class="nav-item active" href="admin-profile.html"><span class="nav-icon">&#128100;</span>My Profile</a><a class="nav-item" href="admin-holidays.html"><span class="nav-icon">&#128197;</span>Calendar Management</a></nav><button class="logout-btn" onclick="logoutUser()">&#8594; Log out</button></aside><main class="main"><header class="page-header"><h1>Administrator Profile</h1><p>Manage your administrator contact information.</p></header><section class="hero"><div><p class="hero-label">ADMINISTRATOR PROFILE</p><h2>Keep your account details current</h2><span>Your contact details are used for system and HR notifications.</span></div><div class="hero-icon">&#128188;</div></section><div class="profile-layout"><section class="panel identity-card"><div id="profileAvatar" class="profile-avatar">A</div><h2 id="profileName">Administrator</h2><p id="profileEmail">Loading...</p><span class="role-tag">Administrator</span></section><section class="panel"><h2 class="panel-title">Account details</h2><p class="panel-subtitle">Your username and administrator role are managed by the system.</p><div id="message" class="message"></div><form id="profileForm"><div class="form-grid"><div><label for="username">Username</label><input id="username" class="readonly" readonly></div><div><label for="role">Role</label><input id="role" class="readonly" readonly></div><div><label for="firstName">First name</label><input id="firstName" maxlength="150"></div><div><label for="lastName">Last name</label><input id="lastName" maxlength="150"></div><div class="full-width"><label for="email">Email address</label><input id="email" type="email" required></div><div><label for="phone">Phone number</label><input id="phone" maxlength="20" placeholder="e.g. 9876543210"></div><div class="full-width"><label for="address">Address</label><textarea id="address" placeholder="Enter your current address"></textarea></div></div><button class="primary-btn" type="submit">Save changes</button></form></section></div></main></div><script src="profile.js"></script></body></html>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f4f8f6">
+  <script src="js/theme.js"></script>
+  <title>My profile · PayrollPro</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="css/app.css">
+</head>
+<body data-role="ADMIN">
+<main id="content">
+  <div class="page-header">
+    <div><h1>My profile</h1><p>Your account details.</p></div>
+    <div class="page-actions" id="actions"></div>
+  </div>
+  <div class="grid grid-main">
+    <section class="card">
+      <div class="card-header"><div><h2>Personal details</h2></div></div>
+      <form class="card-body form-grid" id="form" novalidate>
+        <div class="alert alert-danger span-2" id="formError" hidden></div>
+        <div class="field"><label for="first_name">First name</label><input class="input" id="first_name" name="first_name" maxlength="150"></div>
+        <div class="field"><label for="last_name">Last name</label><input class="input" id="last_name" name="last_name" maxlength="150"></div>
+        <div class="field"><label for="email">Email</label><input class="input" id="email" name="email" type="email" required></div>
+        <div class="field"><label for="phone">Phone</label><input class="input" id="phone" name="phone" type="tel"></div>
+        <div class="field span-2"><label for="address">Address</label><textarea class="textarea" id="address" name="address"></textarea></div>
+        <div class="span-2"><button class="btn btn-primary" type="submit">Save changes</button></div>
+      </form>
+    </section>
+    <div class="stack">
+      <section class="card"><div class="card-body" style="text-align:center">
+        <span class="avatar avatar-lg" id="avatar" style="margin:0 auto 12px"></span>
+        <div style="font-weight:650;font-size:16px" id="pName"></div><div class="muted" id="pRole"></div>
+        <div style="margin-top:14px"><label class="btn btn-sm" for="photo"> Change photo</label><input type="file" id="photo" accept="image/png,image/jpeg" class="sr-only"></div>
+        <p class="subtle" style="font-size:12.5px;margin:10px 0 0">JPG or PNG, up to 2 MB.</p>
+      </div></section>
+      <section class="card" id="empCard" hidden><div class="card-header"><div><h2>Employment</h2></div></div><div class="card-body"><dl class="kv" id="empKv"></dl></div></section>
+    </div>
+  </div>
+</main>
+<script src="js/app.js"></script>
+<script src="js/profile.js"></script>
+</body>
+</html>

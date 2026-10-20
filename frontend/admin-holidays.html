@@ -1,1 +1,31 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Calendar Management</title><link rel="stylesheet" href="holidays.css"></head><body data-role="ADMIN"><div class="dashboard"><aside class="sidebar"><div class="logo"><div class="logo-icon">P</div><div><h2>Payroll<span>Pro</span></h2><small>Admin Portal</small></div></div><nav><a class="nav-item" href="admin-dashboard.html"><span class="nav-icon">&#8962;</span>Dashboard</a><a class="nav-item" href="admin-dashboard.html"><span class="nav-icon">&#128197;</span>Leave Management</a><a class="nav-item" href="admin-documents.html"><span class="nav-icon">&#128196;</span>Document Review</a><a class="nav-item" href="admin-profile.html"><span class="nav-icon">&#128100;</span>My Profile</a><a class="nav-item active" href="admin-holidays.html"><span class="nav-icon">&#128197;</span>Calendar Management</a></nav><button class="logout-btn" onclick="logoutUser()">&#8594; Log out</button></aside><main class="main"><header class="page-header"><h1>Calendar Management</h1><p>Create and maintain the company-wide holiday calendar.</p></header><section class="hero"><div><p class="hero-label">HOLIDAY MANAGEMENT</p><h2>Publish the company holiday schedule</h2><span>Use green fixed holidays for confirmed dates and yellow tentative holidays for dates awaiting confirmation.</span></div><div class="hero-icon">&#128197;</div></section><div class="calendar-layout"><section class="panel"><div class="calendar-head"><h2 id="monthTitle">Calendar</h2><div class="month-controls"><button id="previousMonth" aria-label="Previous month">&lt;</button><button id="currentMonth">Today</button><button id="nextMonth" aria-label="Next month">&gt;</button></div></div><div class="weekdays"><div>Sun</div><div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div></div><div id="calendar" class="calendar-grid"></div><div class="legend"><span><i class="fixed"></i>Fixed holiday</span><span><i class="tentative"></i>Tentative holiday</span></div></section><aside class="panel"><h2 id="formTitle" class="panel-title">Add a holiday</h2><p class="panel-subtitle">Applies to every employee.</p><div id="message" class="message"></div><form id="holidayForm"><input id="holidayId" type="hidden"><label for="holidayName">Holiday name</label><input id="holidayName" maxlength="100" required placeholder="e.g. Diwali"><label for="holidayDate">Date</label><input id="holidayDate" type="date" required><label for="holidayType">Holiday type</label><select id="holidayType"><option value="FIXED">Fixed (confirmed)</option><option value="TENTATIVE">Tentative (may change)</option></select><label for="holidayDescription">Description (optional)</label><textarea id="holidayDescription" placeholder="Add a short note for employees"></textarea><button class="primary-btn" type="submit">Save holiday</button><button id="cancelEdit" class="danger-btn edit-form" type="button">Cancel editing</button></form><hr style="border:0;border-top:1px solid #edf3ef;margin:20px 0"><h2 class="panel-title">Scheduled holidays</h2><div id="holidayList" class="holiday-list">Loading holidays...</div></aside></div></main></div><script src="admin-holidays.js"></script></body></html>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f4f8f6">
+  <script src="js/theme.js"></script>
+  <title>Holiday calendar · PayrollPro</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="css/app.css">
+</head>
+<body data-role="ADMIN">
+<main id="content">
+  <div class="page-header">
+    <div><h1>Holiday calendar</h1><p>Holidays are excluded from working days in payroll.</p></div>
+    <div class="page-actions" id="actions"><button class="btn btn-primary" id="addBtn" type="button"></button></div>
+  </div>
+  <section class="card">
+    <div class="card-header">
+      <div class="row"><button class="icon-btn" id="prev" type="button" aria-label="Previous month"></button><h2 id="monthTitle" aria-live="polite"></h2><button class="icon-btn" id="next" type="button" aria-label="Next month"></button></div>
+      <button class="btn btn-sm" id="todayBtn" type="button">Today</button>
+    </div>
+    <div class="cal-head"><div>Sun</div><div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div></div>
+    <div class="cal-grid" id="grid"></div>
+  </section>
+  <section class="card" style="margin-top:20px"><div class="card-header"><div><h2 id="listTitle">Holidays</h2></div></div><ul class="list" id="list"></ul></section>
+</main>
+<script src="js/app.js"></script>
+<script src="js/holidays.js"></script>
+</body>
+</html>

@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f4f8f6">
+  <script src="js/theme.js"></script>
+  <title>Settings · PayrollPro</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+<main id="content">
+  <div class="page-header">
+    <div><h1>Settings</h1><p>Manage your password and account security.</p></div>
+    <div class="page-actions" id="actions"></div>
+  </div>
+  <div class="grid grid-2">
+    <section class="card">
+      <div class="card-header"><div><h2>Change password</h2><p>Use at least 8 characters that are not easy to guess.</p></div></div>
+      <form class="card-body form-grid" id="pwForm" novalidate>
+        <div class="alert alert-danger span-2" id="pwError" hidden></div>
+        <div class="field span-2"><label for="current_password">Current password</label><input class="input" id="current_password" name="current_password" type="password" autocomplete="current-password" required></div>
+        <div class="field span-2"><label for="new_password">New password</label><input class="input" id="new_password" name="new_password" type="password" autocomplete="new-password" required></div>
+        <div class="field span-2"><label for="confirm_password">Confirm new password</label><input class="input" id="confirm_password" name="confirm_password" type="password" autocomplete="new-password" required></div>
+        <div class="span-2"><button class="btn btn-primary" type="submit">Update password</button></div>
+      </form>
+    </section>
+    <section class="card" id="googleCard">
+      <div class="card-header"><div><h2>Google account</h2><p>Sign in faster by connecting your Google account.</p></div></div>
+      <div class="card-body">
+        <div class="alert alert-danger" id="googleError" role="alert" hidden></div>
+        <div class="alert alert-success" id="googleOk" role="status" hidden></div>
+        <div id="googleStatus" class="stack-sm"><span class="skeleton" style="width:50%"></span></div>
+      </div>
+    </section>
+    <section class="card">
+      <div class="card-header"><div><h2>Session</h2><p>Sign out of this browser.</p></div></div>
+      <div class="card-body"><p class="muted" style="margin-top:0">You are signed in as <strong id="who"></strong>.</p><button class="btn" id="signOut" type="button"></button></div>
+    </section>
+  </div>
+</main>
+<script src="js/app.js"></script>
+<script src="js/settings.js"></script>
+</body>
+</html>

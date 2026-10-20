@@ -1,0 +1,9 @@
+__pycache__/
+*.pyc
+venv/
+.venv/
+backend/.env
+backend/media/
+.DS_Store
+_backup_original/
+_to_delete/

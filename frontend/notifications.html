@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f4f8f6">
+  <script src="js/theme.js"></script>
+  <title>Notifications · PayrollPro</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+<main id="content">
+  <div class="page-header">
+    <div><h1>Notifications</h1><p>Updates about requests, payroll and announcements.</p></div>
+    <div class="page-actions" id="actions"><button class="btn" id="markAll" type="button"></button><button class="btn btn-primary" id="sendBtn" type="button" hidden></button></div>
+  </div>
+  <section class="card"><div id="list"></div></section>
+  <section class="card" id="sentCard" style="margin-top:20px" hidden>
+    <div class="card-header"><div><h2>Sent notifications</h2><p>Notifications you sent to employees, with delivery, read count and expiry.</p></div></div>
+    <div class="table-wrap"><table class="table"><thead><tr><th>Notification</th><th>Sent to</th><th class="right">Delivered</th><th class="right">Read</th><th>Expires</th><th>Sent</th><th class="right">Actions</th></tr></thead><tbody id="sentRows"></tbody></table></div>
+  </section>
+</main>
+<script src="js/app.js"></script>
+<script src="js/notifications.js"></script>
+</body>
+</html>

@@ -1,383 +1,105 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Payroll Management System</title>
-    <link rel="stylesheet" href="style.css">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f4f8f6">
+  <script src="js/theme.js"></script>
+  <title>Sign in · PayrollPro</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="css/app.css">
 </head>
-
 <body>
+<div class="auth">
+  <aside class="auth-aside" aria-hidden="true">
+    <div class="brand"><div class="brand-mark">P</div><div class="brand-name">PayrollPro</div></div>
+    <div>
+      <h2>Payroll, attendance and leave in one calm workspace.</h2>
+      <p>Run monthly payroll, approve requests and give every employee a clear view of their pay.</p>
+      <ul class="auth-points">
+        <li><span id="pt1"></span><span>Accurate salary calculations with attendance-based loss of pay</span></li>
+        <li><span id="pt2"></span><span>Downloadable PDF payslips for every pay period</span></li>
+        <li><span id="pt3"></span><span>Role-based access for administrators and employees</span></li>
+      </ul>
+    </div>
+    <small>© PayrollPro</small>
+  </aside>
 
-<div class="page">
+  <main class="auth-main" id="content">
+    <span class="auth-theme" id="authTheme"></span>
+    <div class="auth-box">
 
-    <div class="brand-section">
-
-        <div class="brand">
-            <div class="brand-icon">P</div>
-            <div>Payroll<span class="light">Pro</span></div>
+      <!-- Sign in -->
+      <section id="loginSection" aria-labelledby="loginTitle">
+        <h1 id="loginTitle">Welcome back</h1>
+        <p>Sign in to your account to continue.</p>
+        <div class="alert alert-info" id="expiredNotice" hidden></div>
+        <div class="segmented" role="group" aria-label="Sign in as">
+          <button type="button" id="employeeBtn" aria-pressed="true">Employee</button>
+          <button type="button" id="adminBtn" aria-pressed="false">Administrator</button>
         </div>
+        <form id="loginForm" class="stack-sm" novalidate>
+          <div class="alert alert-danger" id="loginError" role="alert" hidden></div>
+          <div class="field"><label for="loginUsername">Username or email</label><input class="input" id="loginUsername" name="username" autocomplete="username" required autofocus></div>
+          <div class="field"><label for="loginPassword">Password</label>
+            <div class="pw-wrap"><input class="input" id="loginPassword" name="password" type="password" autocomplete="current-password" required><button class="icon-btn" type="button" data-toggle-password="loginPassword" aria-label="Show password"></button></div>
+          </div>
+          <label class="check"><input type="checkbox" id="rememberMe"> Keep me signed in on this device</label>
+          <button class="btn btn-primary btn-block" id="loginSubmit" type="submit">Sign in</button>
+        </form>
+        <div class="divider" role="separator"><span>or</span></div>
+        <button class="btn btn-google" id="googleLogin" type="button"></button>
+        <p class="google-hint" id="googleHint" hidden></p>
+        <div class="auth-links"><button class="link-btn" type="button" data-show="recoverySection">Forgot password?</button><button class="link-btn" type="button" data-show="registerSection" id="registerLink">Create employee account</button></div>
+      </section>
 
-        <div class="brand-content">
-            <div class="tag">EMPLOYEE PAYROLL MANAGEMENT</div>
+      <!-- Register -->
+      <section id="registerSection" aria-labelledby="registerTitle" hidden>
+        <h1 id="registerTitle">Create your account</h1>
+        <p>Employee accounts only. An administrator will complete your employment details.</p>
+        <form id="registerForm" class="stack-sm" novalidate>
+          <div class="alert alert-danger" id="registerError" role="alert" hidden></div>
+          <div class="alert alert-success" id="registerOk" role="status" hidden></div>
+          <div class="field"><label for="registerUsername">Username</label><input class="input" id="registerUsername" name="username" autocomplete="username" required></div>
+          <div class="field"><label for="registerEmail">Email</label><input class="input" id="registerEmail" name="email" type="email" autocomplete="email" required></div>
+          <div class="field"><label for="registerPassword">Password</label><input class="input" id="registerPassword" name="password" type="password" autocomplete="new-password" required><span class="hint">At least 8 characters; avoid common or all-numeric passwords.</span></div>
+          <div class="field"><label for="confirmPassword">Confirm password</label><input class="input" id="confirmPassword" name="confirm_password" type="password" autocomplete="new-password" required></div>
+          <button class="btn btn-primary btn-block" type="submit">Create account</button>
+        </form>
+        <div class="divider" role="separator"><span>or</span></div>
+        <button class="btn btn-google" id="googleRegister" type="button"></button>
+        <div class="auth-links"><button class="link-btn" type="button" data-show="loginSection">Back to sign in</button></div>
+      </section>
 
-            <h1>
-                Manage your workforce.
-                <span>Simply.</span>
-            </h1>
-
-            <p>
-                A secure and centralized platform for managing employees,
-                attendance, leave, payroll and more.
-            </p>
-
-            <div class="features">
-
-                <div class="feature">
-                    <div class="feature-icon">✓</div>
-                    <div>
-                        <strong>Secure Access</strong>
-                        <small>Protected employee information</small>
-                    </div>
-                </div>
-
-                <div class="feature">
-                    <div class="feature-icon">₹</div>
-                    <div>
-                        <strong>Payroll Management</strong>
-                        <small>Simple and accurate salary management</small>
-                    </div>
-                </div>
-
-                <div class="feature">
-                    <div class="feature-icon">⌁</div>
-                    <div>
-                        <strong>Easy Management</strong>
-                        <small>Everything in one place</small>
-                    </div>
-                </div>
-
-            </div>
+      <!-- Password recovery -->
+      <section id="recoverySection" aria-labelledby="recoveryTitle" hidden>
+        <h1 id="recoveryTitle">Reset your password</h1>
+        <p id="recoveryLead">Enter your username or email and we will send you a verification code.</p>
+        <div class="stack-sm">
+          <div class="alert alert-danger" id="recoveryError" role="alert" hidden></div>
+          <div class="alert alert-success" id="recoveryOk" role="status" hidden></div>
+          <form id="recoveryStep1" class="stack-sm" novalidate>
+            <div class="field"><label for="recoveryEmail">Username or email</label><input class="input" id="recoveryEmail" required></div>
+            <button class="btn btn-primary btn-block" type="submit">Send verification code</button>
+          </form>
+          <form id="recoveryStep2" class="stack-sm" hidden novalidate>
+            <div class="field"><label for="recoveryOTP">6-digit code</label><input class="input" id="recoveryOTP" inputmode="numeric" maxlength="6" autocomplete="one-time-code" required></div>
+            <button class="btn btn-primary btn-block" type="submit">Verify code</button>
+            <button class="link-btn" type="button" id="resendCode">Send a new code</button>
+          </form>
+          <form id="recoveryStep3" class="stack-sm" hidden novalidate>
+            <div class="field"><label for="recoveryPassword">New password</label><input class="input" id="recoveryPassword" type="password" autocomplete="new-password" required></div>
+            <div class="field"><label for="recoveryConfirm">Confirm new password</label><input class="input" id="recoveryConfirm" type="password" autocomplete="new-password" required></div>
+            <button class="btn btn-primary btn-block" type="submit">Set new password</button>
+          </form>
         </div>
-
-        <div class="copyright">
-            © 2026 PayrollPro
-        </div>
+        <div class="auth-links"><button class="link-btn" type="button" data-show="loginSection">Back to sign in</button></div>
+      </section>
 
     </div>
-
-
-    <div class="form-section">
-
-        <div class="form-card">
-
-            <div class="mobile-brand">
-                <div class="brand-icon">P</div>
-                PayrollPro
-            </div>
-
-
-            <!-- LOGIN -->
-
-            <div id="loginSection">
-
-                <div class="heading">
-                    <h2>Welcome back 👋</h2>
-                    <p>Sign in to continue to your account</p>
-                    <div id="selectedRoleText" style="display:inline-block; margin-top:10px; padding:6px 10px; border-radius:20px; background:#edf7f0; color:#176b45; font-size:10px; font-weight:700;">Signing in as Employee</div>
-                </div>
-
-
-                <div class="role-selection">
-
-                    <button
-                        type="button"
-                        id="employeeBtn"
-                        class="role active"
-                        onclick="selectRole('EMPLOYEE')">
-
-                        <span class="role-icon">👤</span>
-
-                        <div>
-                            <strong>Employee</strong>
-                            <small>Employee portal</small>
-                        </div>
-
-                        <span class="radio"></span>
-
-                    </button>
-
-
-                    <button
-                        type="button"
-                        id="adminBtn"
-                        class="role"
-                        onclick="selectRole('ADMIN')">
-
-                        <span class="role-icon">🛡</span>
-
-                        <div>
-                            <strong>Admin</strong>
-                            <small>Administration portal</small>
-                        </div>
-
-                        <span class="radio"></span>
-
-                    </button>
-
-                </div>
-
-
-                <div class="input-group">
-
-                    <label>Username</label>
-
-                    <div class="input-box">
-                        <span>👤</span>
-
-                        <input
-                            type="text"
-                            id="loginUsername"
-                            placeholder="Enter your username">
-                    </div>
-
-                </div>
-
-
-                <div class="input-group">
-
-                    <div class="label-row">
-                        <label>Password</label>
-                        <a href="#" onclick="showRecovery(); return false;">Forgot password?</a>
-                    </div>
-
-                    <div class="input-box">
-
-                        <span>🔒</span>
-
-                        <input
-                            type="password"
-                            id="loginPassword"
-                            placeholder="Enter your password">
-
-                        <button
-                            type="button"
-                            class="eye"
-                            onclick="togglePassword('loginPassword', this)">
-                            ◉
-                        </button>
-
-                    </div>
-
-                </div>
-
-                <label style="display:flex; align-items:center; gap:8px; margin:12px 0; font-size:12px; color:#5d6b63;">
-                    <input type="checkbox" id="rememberMe"> Remember me on this device
-                </label>
-
-
-                <button
-                    type="button"
-                    id="loginSubmitButton"
-                    class="submit-btn"
-                    onclick="login()">
-
-                    <span id="loginSubmitText">Sign In as Employee</span>
-                    <span>→</span>
-
-                </button>
-
-
-                <div
-                    id="loginMessage"
-                    class="message">
-                </div>
-
-
-                <div class="divider">
-                    OR
-                </div>
-
-                <button type="button" class="submit-btn" style="background:#fff; color:#176b45; border:1px solid #cfe3d6;" onclick="googleLogin()">
-                    Continue with Google <span>G</span>
-                </button>
-
-
-                <div class="switch">
-                    Don't have an account?
-
-                    <button
-                        type="button"
-                        onclick="showRegister()">
-                        Create account
-                    </button>
-                </div>
-
-            </div>
-
-
-            <!-- REGISTER -->
-
-            <div id="registerSection" style="display:none;">
-
-                <div class="heading">
-                    <h2>Create account</h2>
-                    <p>Register as an employee</p>
-                </div>
-
-
-                <div class="input-group">
-
-                    <label>Username</label>
-
-                    <div class="input-box">
-                        <span>👤</span>
-
-                        <input
-                            type="text"
-                            id="registerUsername"
-                            placeholder="Choose a username">
-                    </div>
-
-                </div>
-
-                <div class="input-group">
-                    <label>Account type</label>
-                    <div class="input-box">
-                        <select id="registerRole" style="border:0; outline:0; width:100%; background:transparent; color:inherit;">
-                            <option value="EMPLOYEE">Employee</option>
-                            <option value="ADMIN">Administrator</option>
-                        </select>
-                    </div>
-                </div>
-
-
-                <div class="input-group">
-
-                    <label>Email</label>
-
-                    <div class="input-box">
-                        <span>✉</span>
-
-                        <input
-                            type="email"
-                            id="registerEmail"
-                            placeholder="Enter your email">
-                    </div>
-
-                </div>
-
-
-                <div class="input-group">
-
-                    <label>Password</label>
-
-                    <div class="input-box">
-
-                        <span>🔒</span>
-
-                        <input
-                            type="password"
-                            id="registerPassword"
-                            placeholder="Create a password">
-
-                        <button
-                            type="button"
-                            class="eye"
-                            onclick="togglePassword('registerPassword', this)">
-                            ◉
-                        </button>
-
-                    </div>
-
-                </div>
-
-
-                <div class="input-group">
-
-                    <label>Confirm Password</label>
-
-                    <div class="input-box">
-
-                        <span>🔒</span>
-
-                        <input
-                            type="password"
-                            id="confirmPassword"
-                            placeholder="Confirm your password">
-
-                        <button
-                            type="button"
-                            class="eye"
-                            onclick="togglePassword('confirmPassword', this)">
-                            ◉
-                        </button>
-
-                    </div>
-
-                </div>
-
-
-                <button
-                    type="button"
-                    class="submit-btn"
-                    onclick="register()">
-
-                    Create Account
-                    <span>→</span>
-
-                </button>
-
-
-                <div
-                    id="registerMessage"
-                    class="message">
-                </div>
-
-
-                <div class="divider">
-                    OR
-                </div>
-
-
-                <div class="switch">
-
-                    Already have an account?
-
-                    <button
-                        type="button"
-                        onclick="showLogin()">
-                        Sign in
-                    </button>
-
-                </div>
-
-            </div>
-
-            <!-- PASSWORD RECOVERY -->
-            <div id="recoverySection" style="display:none;">
-                <div class="heading">
-                    <h2>Reset your password</h2>
-                    <p>Generate and verify a local OTP to choose a new password.</p>
-                </div>
-                <div class="input-group"><label>Email or username</label><div class="input-box"><span>✉</span><input type="text" id="recoveryEmail" placeholder="Enter your email or username"></div></div>
-                <button type="button" class="submit-btn" onclick="requestOTP()">Generate OTP <span>→</span></button>
-                <div class="input-group"><label>OTP</label><div class="input-box"><span>•</span><input type="text" id="recoveryOTP" inputmode="numeric" maxlength="6" placeholder="Enter the 6-digit OTP"></div></div>
-                <button type="button" class="submit-btn" onclick="verifyOTP()">Verify OTP <span>→</span></button>
-                <div class="input-group"><label>New password</label><div class="input-box"><span>🔒</span><input type="password" id="recoveryPassword" placeholder="Create a new password"></div></div>
-                <div class="input-group"><label>Confirm password</label><div class="input-box"><span>🔒</span><input type="password" id="recoveryConfirmPassword" placeholder="Confirm your password"></div></div>
-                <button type="button" class="submit-btn" onclick="resetPassword()">Set New Password <span>→</span></button>
-                <div id="recoveryMessage" class="message"></div>
-                <div class="switch"><button type="button" onclick="showLogin()">Back to sign in</button></div>
-            </div>
-
-        </div>
-
-    </div>
-
+  </main>
 </div>
-
-<script src="script.js"></script>
-
+<script src="js/app.js"></script>
+<script src="js/login.js"></script>
 </body>
 </html>

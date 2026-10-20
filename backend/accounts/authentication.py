@@ -1,13 +1,13 @@
 from rest_framework.authentication import SessionAuthentication
 
 
-class CsrfExemptSessionAuthentication(SessionAuthentication):
-    """Use the existing session login for the separately hosted frontend.
+class ApiSessionAuthentication(SessionAuthentication):
+    """Session authentication that answers unauthenticated requests with 401 (not 403).
 
-    The leave API is explicitly CSRF-exempt and is consumed from the local
-    frontend development server, so DRF must not reject the session before
-    the view is reached.
+    CSRF validation is inherited and stays enabled for unsafe methods. The
+    ``WWW-Authenticate`` value makes DRF choose 401, which the frontend uses to
+    send signed-out users back to the login page.
     """
 
-    def enforce_csrf(self, request):
-        return
+    def authenticate_header(self, request):
+        return 'Session'

@@ -1,8 +1,15 @@
 from django.urls import path
-from .views import attendance_history, attendance_list, attendance_mark, attendance_settings, attendance_status, change_password, document_delete, document_list_create, document_review, employee_detail, employee_list_create, holiday_detail, holiday_list_create, login_user, logout_user, my_profile, register, request_password_reset, reset_password, verify_password_reset, leave_list_create, leave_update_status, wfh_detail, wfh_list_create
+from .google_auth import google_callback, google_config, google_link, google_start
+from .auth_views import change_password, csrf_token, login_user, logout_user, register, request_password_reset, reset_password, verify_password_reset
+from .views import audit_log_list, announcement_detail, announcement_list_create, attendance_history, attendance_list, attendance_mark, attendance_settings, attendance_status, chat_conversation_list_create, chat_employee_list, chat_message_list_create, department_list, department_rename, document_delete, document_file, document_list_create, document_review, employee_detail, employee_list_create, employee_meta, holiday_detail, holiday_list_create, my_profile, notification_broadcast_detail, notification_broadcast_list_create, notification_list, notification_mark_all_read, notification_mark_read, leave_balance, leave_balance_adjust, leave_cancel, leave_carry_forward, leave_list_create, leave_policy_settings, leave_type_detail, leave_type_list_create, leave_update_status, wfh_detail, wfh_list_create
 
 urlpatterns = [
+    path('csrf/', csrf_token, name='csrf-token'),
     path('register/', register),
+    path('auth/google/config/', google_config, name='google-config'),
+    path('auth/google/start/', google_start, name='google-start'),
+    path('auth/google/callback/', google_callback, name='google-callback'),
+    path('auth/google/link/', google_link, name='google-link'),
     path('login/', login_user),
     path('logout/', logout_user),
     path('password/forgot/', request_password_reset),
@@ -10,11 +17,22 @@ urlpatterns = [
     path('password/reset/', reset_password),
     path('password/change/', change_password),
     path('employees/', employee_list_create, name='employee-list-create'),
+    path('employees/meta/', employee_meta, name='employee-meta'),
+    path('employees/departments/', department_list, name='department-list'),
+    path('employees/departments/rename/', department_rename, name='department-rename'),
     path('employees/<int:pk>/', employee_detail, name='employee-detail'),
     path('leaves/', leave_list_create, name='leave-list-create'),
+    path('leaves/balance/', leave_balance, name='leave-balance'),
     path('leaves/<int:pk>/status/', leave_update_status, name='leave-update-status'),
+    path('leaves/<int:pk>/', leave_cancel, name='leave-cancel'),
+    path('leave-types/', leave_type_list_create, name='leave-type-list-create'),
+    path('leave-types/<int:pk>/', leave_type_detail, name='leave-type-detail'),
+    path('leave-policy/', leave_policy_settings, name='leave-policy-settings'),
+    path('leave-policy/carry-forward/', leave_carry_forward, name='leave-carry-forward'),
+    path('leave-policy/balances/', leave_balance_adjust, name='leave-balance-adjust'),
     path('documents/', document_list_create, name='document-list-create'),
     path('documents/<int:pk>/', document_delete, name='document-delete'),
+    path('documents/<int:pk>/file/', document_file, name='document-file'),
     path('documents/<int:pk>/review/', document_review, name='document-review'),
     path('profile/', my_profile, name='my-profile'),
     path('holidays/', holiday_list_create, name='holiday-list-create'),
@@ -26,4 +44,15 @@ urlpatterns = [
     path('attendance/', attendance_list, name='attendance-list'),
     path('wfh/', wfh_list_create, name='wfh-list-create'),
     path('wfh/<int:pk>/', wfh_detail, name='wfh-detail'),
+    path('announcements/', announcement_list_create, name='announcement-list-create'),
+    path('announcements/<int:pk>/', announcement_detail, name='announcement-detail'),
+    path('chat/employees/', chat_employee_list, name='chat-employee-list'),
+    path('chat/conversations/', chat_conversation_list_create, name='chat-conversation-list-create'),
+    path('chat/conversations/<int:conversation_id>/messages/', chat_message_list_create, name='chat-message-list-create'),
+    path('notifications/', notification_list, name='notification-list'),
+    path('notifications/read-all/', notification_mark_all_read, name='notification-mark-all-read'),
+    path('notifications/broadcasts/', notification_broadcast_list_create, name='notification-broadcast-list-create'),
+    path('notifications/broadcasts/<int:pk>/', notification_broadcast_detail, name='notification-broadcast-detail'),
+    path('notifications/<int:pk>/read/', notification_mark_read, name='notification-mark-read'),
+    path('audit-logs/', audit_log_list, name='audit-log-list'),
 ]

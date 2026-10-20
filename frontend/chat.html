@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f4f8f6">
+  <script src="js/theme.js"></script>
+  <title>Messages · PayrollPro</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+<main id="content">
+  <div class="page-header">
+    <div><h1>Messages</h1><p>Private conversations between administrators and employees.</p></div>
+    <div class="page-actions" id="actions"></div>
+  </div>
+  <section class="card chat" id="chat">
+    <div class="chat-side">
+      <div class="toolbar" id="newChatBox" hidden><select class="select grow" id="newChat" aria-label="Start a conversation with"><option value="">Start a conversation…</option></select></div>
+      <div class="chat-contacts" id="contacts" role="list"></div>
+    </div>
+    <div class="chat-pane" id="pane"></div>
+  </section>
+</main>
+<script src="js/app.js"></script>
+<script src="js/chat.js"></script>
+</body>
+</html>

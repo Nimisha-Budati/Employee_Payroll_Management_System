@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f4f8f6">
+  <script src="js/theme.js"></script>
+  <title>Shifts · PayrollPro</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+<main id="content">
+  <div class="page-header">
+    <div><h1>Shifts</h1><p>Define working shifts, assign them to employees and keep each employee's shift record. Late minutes and overtime use these shifts.</p></div>
+    <div class="page-actions"><button class="btn" id="addShift" type="button"></button><button class="btn btn-primary" id="assignBtn" type="button"></button></div>
+  </div>
+
+  <section class="card">
+    <div class="card-header"><div><h2>Shift definitions</h2><p>The default shift applies to employees who have no assignment on a day.</p></div></div>
+    <div class="table-wrap"><table class="table"><thead><tr><th>Shift</th><th>Hours</th><th class="right">Grace</th><th class="right">Break</th><th class="right">Standard day</th><th class="right">Employees today</th><th>Status</th><th class="right">Actions</th></tr></thead><tbody id="shiftRows"></tbody></table></div>
+  </section>
+
+  <section class="card" style="margin-top:20px">
+    <div class="card-header"><div><h2>Employee shift records</h2><p>Every assignment, current and past.</p></div></div>
+    <div class="toolbar">
+      <div class="input-group grow"><span id="searchIcon"></span><input class="input" id="search" type="search" placeholder="Search by employee, ID or shift" aria-label="Search assignments"></div>
+      <select class="select" id="shiftFilter" aria-label="Shift"><option value="">All shifts</option></select>
+      <label class="check" style="white-space:nowrap"><input type="checkbox" id="currentOnly"> Active today</label>
+    </div>
+    <div class="table-wrap"><table class="table"><thead><tr><th>Employee</th><th>Shift</th><th>From</th><th>To</th><th>Notes</th><th class="right">Actions</th></tr></thead><tbody id="rows"></tbody></table></div>
+    <div class="pager" id="pager" hidden></div>
+  </section>
+</main>
+<script src="js/app.js"></script>
+<script src="js/shifts.js"></script>
+</body>
+</html>

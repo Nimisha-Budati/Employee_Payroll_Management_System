@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f4f8f6">
+  <script src="js/theme.js"></script>
+  <title>Salary structures · PayrollPro</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+<main id="content">
+  <div class="page-header">
+    <div><h1>Salary structures</h1><p>Monthly pay components for each employee. Payroll cannot be generated without one.</p></div>
+    <div class="page-actions"></div>
+  </div>
+  <section class="card">
+    <div class="toolbar">
+      <div class="input-group grow"><span id="searchIcon"></span><input class="input" id="search" type="search" placeholder="Search by name, ID or department" aria-label="Search employees"></div>
+      <select class="select" id="cfgFilter" aria-label="Filter by configuration"><option value="">All employees</option><option value="false">Not configured</option><option value="true">Configured</option></select>
+    </div>
+    <div class="table-wrap"><table class="table"><thead><tr><th>Employee</th><th>Department</th><th class="right">Basic</th><th class="right">Gross / month</th><th>Effective from</th><th class="right">Actions</th></tr></thead><tbody id="rows"></tbody></table></div>
+    <div class="pager" id="pager" hidden></div>
+  </section>
+</main>
+<script src="js/app.js"></script>
+<script src="js/salary.js"></script>
+</body>
+</html>

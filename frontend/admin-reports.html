@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f4f8f6">
+  <script src="js/theme.js"></script>
+  <title>Reports · PayrollPro</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+<main id="content">
+  <div class="page-header">
+    <div><h1>Reports</h1><p>Payroll totals and department cost for a year, and Excel exports for employees, attendance, leave, overtime and payroll.</p></div>
+    <div class="page-actions"><select class="select" id="year" aria-label="Year"></select></div>
+  </div>
+  <section class="card" id="excelCard">
+    <div class="card-header"><div><h2>Excel reports</h2><p>Choose a report and filters, then download an .xlsx file built from live records.</p></div></div>
+    <form class="card-body form-grid" id="excelForm" style="grid-template-columns:repeat(auto-fit,minmax(170px,1fr))"></form>
+  </section>
+  <section class="grid grid-4" id="stats" style="margin-top:20px"></section>
+  <div class="grid grid-main" style="margin-top:20px">
+    <section class="card"><div class="card-header"><div><h2>Net payroll by month</h2><p id="yearNote"></p></div></div><div class="card-body" id="chart"></div></section>
+    <section class="card"><div class="card-header"><div><h2 id="deptTitle">Cost by department</h2><p>Net salary</p></div></div><div class="card-body" id="depts"></div></section>
+  </div>
+  <section class="card" style="margin-top:20px">
+    <div class="card-header"><div><h2>Monthly summary</h2></div></div>
+    <div class="table-wrap"><table class="table"><thead><tr><th>Month</th><th class="right">Payslips</th><th class="right">Gross</th><th class="right">Deductions</th><th class="right">Net</th><th>Status</th><th class="right">Actions</th></tr></thead><tbody id="rows"></tbody></table></div>
+  </section>
+</main>
+<script src="js/app.js"></script>
+<script src="js/reports.js"></script>
+</body>
+</html>

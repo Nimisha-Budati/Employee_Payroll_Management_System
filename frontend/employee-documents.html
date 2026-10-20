@@ -1,28 +1,26 @@
 <!doctype html>
 <html lang="en">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>My Documents</title><link rel="stylesheet" href="documents.css"></head>
-<body>
-<div class="dashboard"><aside class="sidebar">
-  <div class="logo"><div class="logo-icon">P</div><div><h2>Payroll<span>Pro</span></h2><small>Employee Portal</small></div></div>
-  <nav>
-    <a class="nav-item" href="employee-dashboard.html"><span class="nav-icon">&#8962;</span>Dashboard</a>
-    <a class="nav-item" href="employee-dashboard.html"><span class="nav-icon">&#128197;</span>Leave Management</a>
-    <a class="nav-item active" href="employee-documents.html"><span class="nav-icon">&#128196;</span>My Documents</a>
-  </nav>
-  <button class="logout-btn" onclick="logoutUser()">&#8594; Log out</button>
-</aside>
-<main class="main">
-  <header class="page-header"><h1>My Documents</h1><p>Keep your employment documents organised and up to date.</p></header>
-  <section class="hero"><div><p class="hero-label">DOCUMENT CENTRE</p><h2>Securely submit your documents</h2><span>HR will verify each document and leave a note if action is required.</span></div><div class="hero-icon">&#128196;</div></section>
-  <div class="content-grid">
-    <section class="panel"><h2 class="panel-title">Upload a document</h2><p class="panel-subtitle">Files are reviewed by the HR team.</p><div id="message" class="message"></div>
-      <form id="uploadForm">
-        <label for="title">Document title</label><input id="title" maxlength="100" required placeholder="e.g. Aadhaar card">
-        <label for="documentType">Document type</label><select id="documentType"><option value="IDENTITY">Identity proof</option><option value="ADDRESS">Address proof</option><option value="EDUCATION">Education certificate</option><option value="RESUME">Resume</option><option value="OTHER">Other</option></select>
-        <div id="customTypeGroup" hidden><label for="customDocumentType">Specify document type</label><input id="customDocumentType" maxlength="100" placeholder="e.g. PAN card, offer letter"></div>
-        <label for="file">Choose file</label><input id="file" type="file" accept=".pdf,.jpg,.jpeg,.png" required><p class="hint">PDF, JPG, or PNG. Maximum file size: 5 MB.</p><button class="primary-btn" type="submit">Upload document</button>
-      </form>
-    </section>
-    <section class="panel table-wrap"><h2 class="panel-title">Submitted documents</h2><p class="panel-subtitle">You may remove files only while they are awaiting review.</p><table><thead><tr><th>Document</th><th>File</th><th>Status</th><th>Review note</th><th></th></tr></thead><tbody id="documents"><tr><td colspan="5">Loading documents...</td></tr></tbody></table></section>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f4f8f6">
+  <script src="js/theme.js"></script>
+  <title>My documents · PayrollPro</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="css/app.css">
+</head>
+<body data-role="EMPLOYEE">
+<main id="content">
+  <div class="page-header">
+    <div><h1>My documents</h1><p>Upload identity, address and education documents (PDF, JPG or PNG, up to 5 MB).</p></div>
+    <div class="page-actions" id="actions"></div>
   </div>
-</main></div><script src="employee-documents.js"></script></body></html>
+  <section class="card">
+    <div class="toolbar"><select class="select" id="statusFilter" aria-label="Filter by status"><option value="">All statuses</option><option value="PENDING">Pending review</option><option value="VERIFIED">Verified</option><option value="REJECTED">Rejected</option></select></div>
+    <div class="table-wrap"><table class="table"><thead id="head"></thead><tbody id="rows"></tbody></table></div>
+  </section>
+</main>
+<script src="js/app.js"></script>
+<script src="js/documents.js"></script>
+</body>
+</html>

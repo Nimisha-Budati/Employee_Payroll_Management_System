@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f4f8f6">
+  <script src="js/theme.js"></script>
+  <title>Leave requests · PayrollPro</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="css/app.css">
+</head>
+<body data-role="ADMIN" data-kind="leave">
+<main id="content">
+  <div class="page-header">
+    <div><h1>Leave requests</h1><p>Review and decide on employee leave.</p></div>
+    <div class="page-actions" id="actions"></div>
+  </div>
+  <section class="card" id="balances" aria-label="Leave balance" hidden></section>
+  <section class="card" style="margin-top:20px">
+    <div class="toolbar">
+      <div class="input-group grow" id="searchBox"><span id="searchIcon"></span><input class="input" id="search" type="search" placeholder="Search by employee name or ID" aria-label="Search requests"></div>
+      <select class="select" id="statusFilter" aria-label="Filter by status"><option value="">All statuses</option><option value="PENDING">Pending</option><option value="APPROVED">Approved</option><option value="REJECTED">Rejected</option><option value="CANCELLED">Cancelled</option></select>
+    </div>
+    <div class="table-wrap"><table class="table"><thead id="head"></thead><tbody id="rows"></tbody></table></div>
+    <div class="pager" id="pager" hidden></div>
+  </section>
+</main>
+<script src="js/app.js"></script>
+<script src="js/requests.js"></script>
+</body>
+</html>

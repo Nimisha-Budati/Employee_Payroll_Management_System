@@ -1,21 +1,26 @@
 <!doctype html>
 <html lang="en">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Document Review</title><link rel="stylesheet" href="documents.css"></head>
-<body>
-<div class="dashboard"><aside class="sidebar">
-  <div class="logo"><div class="logo-icon">P</div><div><h2>Payroll<span>Pro</span></h2><small>Admin Portal</small></div></div>
-  <nav>
-    <a class="nav-item" href="admin-dashboard.html"><span class="nav-icon">&#8962;</span>Dashboard</a>
-    <a class="nav-item" href="admin-dashboard.html"><span class="nav-icon">&#128197;</span>Leave Management</a>
-    <a class="nav-item active" href="admin-documents.html"><span class="nav-icon">&#128196;</span>Document Review</a>
-    <a class="nav-item" href="admin-profile.html"><span class="nav-icon">&#128100;</span>My Profile</a>
-    <a class="nav-item" href="admin-holidays.html"><span class="nav-icon">&#128197;</span>Calendar Management</a>
-    <a class="nav-item" href="admin-attendance.html"><span class="nav-icon">&#128205;</span>Attendance Management</a>
-  </nav>
-  <button class="logout-btn" onclick="logoutUser()">&#8594; Log out</button>
-</aside>
-<main class="main">
-  <header class="page-header"><h1>Document Review</h1><p>Review employee records and keep document verification current.</p></header>
-  <section class="hero"><div><p class="hero-label">HR DOCUMENT CENTRE</p><h2>Review employee submissions</h2><span>Open each file, then verify it or provide a clear rejection reason.</span></div><div class="hero-icon">&#128188;</div></section>
-  <section class="panel table-wrap"><h2 class="panel-title">Employee documents</h2><p class="panel-subtitle">Documents marked as pending require your review.</p><div id="message" class="message"></div><div class="filters"><label for="filter">Filter by status</label><select id="filter"><option value="ALL">All statuses</option><option value="PENDING">Pending review</option><option value="VERIFIED">Verified</option><option value="REJECTED">Rejected</option></select></div><table><thead><tr><th>Employee</th><th>Document</th><th>File</th><th>Status</th><th>Review note</th><th>Actions</th></tr></thead><tbody id="documents"><tr><td colspan="6">Loading documents...</td></tr></tbody></table></section>
-</main></div><script src="admin-documents.js"></script></body></html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f4f8f6">
+  <script src="js/theme.js"></script>
+  <title>Documents · PayrollPro</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="css/app.css">
+</head>
+<body data-role="ADMIN">
+<main id="content">
+  <div class="page-header">
+    <div><h1>Documents</h1><p>Review documents uploaded by employees.</p></div>
+    <div class="page-actions" id="actions"></div>
+  </div>
+  <section class="card">
+    <div class="toolbar"><div class="input-group grow"><span id="searchIcon"></span><input class="input" id="search" type="search" placeholder="Search by employee, ID or title" aria-label="Search documents"></div><select class="select" id="typeFilter" aria-label="Filter by type"></select><select class="select" id="statusFilter" aria-label="Filter by status"><option value="">All statuses</option><option value="PENDING">Pending review</option><option value="VERIFIED">Verified</option><option value="REJECTED">Rejected</option></select></div>
+    <div class="table-wrap"><table class="table"><thead id="head"></thead><tbody id="rows"></tbody></table></div>
+  </section>
+</main>
+<script src="js/app.js"></script>
+<script src="js/documents.js"></script>
+</body>
+</html>

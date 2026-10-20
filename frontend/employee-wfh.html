@@ -1,1 +1,31 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Work From Home</title><link rel="stylesheet" href="wfh.css"></head><body><div class="dashboard"><aside class="sidebar"><div class="logo"><div class="logo-icon">P</div><div><h2>Payroll<span>Pro</span></h2><small>Employee Portal</small></div></div><nav><a class="nav-item" href="employee-dashboard.html"><span class="nav-icon">&#8962;</span>Dashboard</a><a class="nav-item" href="employee-attendance.html"><span class="nav-icon">&#128205;</span>My Attendance</a><a class="nav-item active" href="employee-wfh.html"><span class="nav-icon">&#127968;</span>Work From Home</a><a class="nav-item" href="employee-documents.html"><span class="nav-icon">&#128196;</span>My Documents</a><a class="nav-item" href="employee-profile.html"><span class="nav-icon">&#128100;</span>My Profile</a></nav><button class="logout-btn" onclick="logoutUser()">&#8594; Log out</button></aside><main class="main"><header class="page-header"><h1>Work From Home</h1><p>Submit and manage your remote-work requests.</p></header><section class="hero"><div><p class="hero-label">REMOTE WORK</p><h2>Plan your work-from-home days</h2><span>Requests are sent to your administrator for approval.</span></div><div class="hero-icon">&#127968;</div></section><div class="wfh-layout"><section class="panel"><h2>New WFH request</h2><p>Select the days you would like to work remotely.</p><div id="message" class="message"></div><form id="wfhForm"><label for="startDate">Start date</label><input id="startDate" type="date" required><label for="endDate">End date</label><input id="endDate" type="date" required><label for="reason">Reason / work plan</label><textarea id="reason" required maxlength="1000" placeholder="Briefly describe the reason and planned work"></textarea><div class="form-actions"><button class="primary-btn" type="submit">Submit request</button></div></form></section><section class="panel"><h2>My WFH requests</h2><div class="summary"><div><strong id="pendingCount">0</strong><small>Pending</small></div><div><strong id="approvedCount">0</strong><small>Approved</small></div><div><strong id="daysCount">0</strong><small>Requested days</small></div></div><div class="table-wrap"><table><thead><tr><th>Dates</th><th>Reason</th><th>Status</th><th>Admin note</th><th></th></tr></thead><tbody id="wfhTable"><tr><td colspan="5">Loading requests...</td></tr></tbody></table></div></section></div></main></div><script src="employee-wfh.js"></script></body></html>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f4f8f6">
+  <script src="js/theme.js"></script>
+  <title>Work from home · PayrollPro</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="css/app.css">
+</head>
+<body data-role="EMPLOYEE" data-kind="wfh">
+<main id="content">
+  <div class="page-header">
+    <div><h1>Work from home</h1><p>Request days to work remotely.</p></div>
+    <div class="page-actions" id="actions"></div>
+  </div>
+  <section class="grid grid-4" id="balances" aria-label="Leave balance" hidden></section>
+  <section class="card" style="margin-top:20px">
+    <div class="toolbar">
+      <div class="input-group grow" id="searchBox"><span id="searchIcon"></span><input class="input" id="search" type="search" placeholder="Search by employee name or ID" aria-label="Search requests"></div>
+      <select class="select" id="statusFilter" aria-label="Filter by status"><option value="">All statuses</option><option value="PENDING">Pending</option><option value="APPROVED">Approved</option><option value="REJECTED">Rejected</option></select>
+    </div>
+    <div class="table-wrap"><table class="table"><thead id="head"></thead><tbody id="rows"></tbody></table></div>
+    <div class="pager" id="pager" hidden></div>
+  </section>
+</main>
+<script src="js/app.js"></script>
+<script src="js/requests.js"></script>
+</body>
+</html>

@@ -1,3 +1,39 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Attendance Management</title><link rel="stylesheet" href="attendance.css"></head>
-<body data-role="ADMIN"><div class="dashboard"><aside class="sidebar"><div class="logo"><div class="logo-icon">P</div><div><h2>Payroll<span>Pro</span></h2><small>Admin Portal</small></div></div><nav><a class="nav-item" href="admin-dashboard.html"><span class="nav-icon">&#8962;</span>Dashboard</a><a class="nav-item" href="admin-dashboard.html"><span class="nav-icon">&#128197;</span>Leave Management</a><a class="nav-item" href="admin-documents.html"><span class="nav-icon">&#128196;</span>Document Review</a><a class="nav-item" href="admin-profile.html"><span class="nav-icon">&#128100;</span>My Profile</a><a class="nav-item" href="admin-holidays.html"><span class="nav-icon">&#128197;</span>Calendar Management</a><a class="nav-item active" href="admin-attendance.html"><span class="nav-icon">&#128205;</span>Attendance Management</a></nav><button class="logout-btn" onclick="logoutUser()">&#8594; Log out</button></aside><main class="main"><header class="page-header"><h1>Attendance Management</h1><p>Set the office location and review employees’ daily attendance.</p></header><section class="hero"><div><p class="hero-label">LOCATION-BASED ATTENDANCE</p><h2>Verify attendance at the workplace</h2><span>Employees can check in and check out only while within the configured radius.</span></div><div class="hero-icon">&#128205;</div></section><div class="attendance-layout"><section class="panel"><div class="panel-header"><div><h2>Office GPS location</h2><p>Set the center of the permitted attendance area.</p></div><span id="locationState" class="state-badge">Not configured</span></div><div id="message" class="message"></div><form id="settingsForm"><div class="form-grid"><div><label for="latitude">Latitude</label><input id="latitude" type="number" step="0.000001" min="-90" max="90" required placeholder="e.g. 12.971599"></div><div><label for="longitude">Longitude</label><input id="longitude" type="number" step="0.000001" min="-180" max="180" required placeholder="e.g. 77.594566"></div><div><label for="radius">Allowed radius (metres)</label><input id="radius" type="number" min="10" max="10000" required value="100"></div><div class="toggle-row"><input id="attendanceEnabled" type="checkbox"><label for="attendanceEnabled">Enable location attendance</label></div></div><div class="form-actions"><button id="useLocation" class="secondary-btn" type="button">&#128205; Use my current location</button><button class="primary-btn" type="submit">Save settings</button></div></form></section><section class="panel help-panel"><h2>How it works</h2><ol><li>Set the office’s latitude and longitude.</li><li>Choose an allowed radius around that point.</li><li>Employees grant GPS permission before check-in or check-out.</li><li>The server verifies their distance and allows one of each action per day.</li></ol><p>For reliable GPS, use HTTPS or localhost and enable device location services.</p></section></div><section class="panel records-panel"><div class="records-heading"><div><h2>Attendance records</h2><p id="recordSummary">Daily check-in and check-out activity.</p></div><div class="record-filter"><label for="attendanceDate">Date</label><input id="attendanceDate" type="date"><button id="refreshRecords" class="secondary-btn" type="button">Refresh</button></div></div><div class="table-wrap"><table><thead><tr><th>Employee</th><th>Date</th><th>Check in</th><th>Check out</th><th>Status</th><th>Office distance</th></tr></thead><tbody id="attendanceTable"><tr><td colspan="6">Loading attendance records...</td></tr></tbody></table></div></section></main></div><script src="admin-attendance.js"></script></body></html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f4f8f6">
+  <script src="js/theme.js"></script>
+  <title>Attendance · PayrollPro</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+<main id="content">
+  <div class="page-header">
+    <div><h1>Attendance</h1><p>Check-ins verified against the office location, with working hours and late minutes against each employee's shift.</p></div>
+    <div class="page-actions" id="actions"><button class="btn" id="excelBtn" type="button"></button><button class="btn" id="settingsBtn" type="button"></button></div>
+  </div>
+  <section class="grid grid-4" id="stats" aria-label="Attendance totals for the filters"></section>
+  <section class="card" style="margin-top:20px">
+    <div class="tabs" role="tablist">
+      <button class="tab" type="button" role="tab" id="tabRecords" aria-selected="true">Daily records</button>
+      <button class="tab" type="button" role="tab" id="tabSummary" aria-selected="false">Late &amp; hours summary</button>
+    </div>
+    <div class="toolbar">
+      <div class="input-group grow"><span id="searchIcon"></span><input class="input" id="search" type="search" placeholder="Search by name or ID" aria-label="Search attendance"></div>
+      <select class="select" id="department" aria-label="Department"><option value="">All departments</option></select>
+      <label class="sr-only" for="from">From</label><input class="input" type="date" id="from" aria-label="From date" style="width:auto">
+      <label class="sr-only" for="to">To</label><input class="input" type="date" id="to" aria-label="To date" style="width:auto">
+      <select class="select" id="late" aria-label="Punctuality"><option value="">All check-ins</option><option value="true">Late only</option><option value="false">On time only</option></select>
+    </div>
+    <div class="table-wrap" id="recordsPane"><table class="table"><thead><tr><th>Employee</th><th>Date</th><th>Shift</th><th>Check in</th><th class="right">Late</th><th>Check out</th><th class="right">Hours</th><th class="right">Distance in / out</th><th>Status</th></tr></thead><tbody id="rows"></tbody></table></div>
+    <div class="table-wrap" id="summaryPane" hidden><table class="table"><thead><tr><th>Employee</th><th>Department</th><th class="right">Days present</th><th class="right">Late days</th><th class="right">Late minutes</th><th class="right">Avg late</th><th class="right">Hours worked</th></tr></thead><tbody id="summaryRows"></tbody></table></div>
+    <div class="pager" id="pager" hidden></div>
+  </section>
+</main>
+<script src="js/app.js"></script>
+<script src="js/attendance.js"></script>
+</body>
+</html>

@@ -1,21 +1,16 @@
 from rest_framework import permissions
+
 from .models import UserProfile
+from .utils import is_admin_user
 
 
 class IsAdminUserRole(permissions.BasePermission):
-    """
-    Allows access only to users with ADMIN role in UserProfile or is_staff.
-    """
+    """Allows access only to administrators (ADMIN role, staff or superuser)."""
+
+    message = 'Access denied. Administrator access is required.'
+
     def has_permission(self, request, view):
-        if not request.user or not request.user.is_authenticated:
-            return False
-        if request.user.is_staff or request.user.is_superuser:
-            return True
-        try:
-            profile = UserProfile.objects.get(user=request.user)
-            return profile.role == 'ADMIN'
-        except UserProfile.DoesNotExist:
-            return False
+        return is_admin_user(request.user)
 
 
 class IsEmployeeUserRole(permissions.BasePermission):
@@ -24,7 +19,4 @@ class IsEmployeeUserRole(permissions.BasePermission):
     def has_permission(self, request, view):
         if not request.user or not request.user.is_authenticated:
             return False
-        try:
-            return UserProfile.objects.get(user=request.user).role == 'EMPLOYEE'
-        except UserProfile.DoesNotExist:
-            return False
+        return UserProfile.objects.filter(user=request.user, role='EMPLOYEE').exists()

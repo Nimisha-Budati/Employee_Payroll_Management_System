@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f4f8f6">
+  <script src="js/theme.js"></script>
+  <title>Leave policy · PayrollPro</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+<main id="content">
+  <div class="page-header">
+    <div><h1>Leave policy</h1><p>Leave types, annual allowances and leave rules. Employees' balances and leave validation use these settings immediately.</p></div>
+    <div class="page-actions"><button class="btn btn-primary" id="addType" type="button"></button></div>
+  </div>
+
+  <section class="card">
+    <div class="card-header"><div><h2>Leave types</h2><p id="typesNote">Allowed days per employee per leave year.</p></div></div>
+    <div class="table-wrap"><table class="table leave-types-table"><thead><tr><th>Leave type</th><th class="right">Days per year</th><th>Pay</th><th>Carry forward</th><th class="right">Requests</th><th>Status</th><th class="right">Actions</th></tr></thead><tbody id="typeRows"></tbody></table></div>
+  </section>
+
+  <div class="grid grid-2" style="margin-top:20px">
+    <section class="card">
+      <div class="card-header"><div><h2>Leave rules</h2><p id="yearNote"></p></div></div>
+      <form class="card-body form-grid" id="rulesForm" novalidate></form>
+    </section>
+    <section class="card">
+      <div class="card-header"><div><h2>Carry forward</h2><p>Move unused days into the next leave year for types that allow it.</p></div></div>
+      <form class="card-body form-grid" id="carryForm" novalidate></form>
+    </section>
+  </div>
+
+  <section class="card" style="margin-top:20px">
+    <div class="card-header"><div><h2>Employee balances</h2><p>Check any employee's balance and add or remove days with a reason.</p></div></div>
+    <div class="toolbar">
+      <select class="select grow" id="balEmployee" aria-label="Employee"><option value="">Choose an employee…</option></select>
+      <label class="sr-only" for="balYear">Leave year</label><input class="input" type="number" id="balYear" min="2000" max="2100" style="width:120px" aria-label="Leave year">
+    </div>
+    <div class="table-wrap"><table class="table"><thead><tr><th>Leave type</th><th class="right">Annual</th><th class="right">Carried</th><th class="right">Adjustment</th><th class="right">Total allowed</th><th class="right">Used</th><th class="right">Pending</th><th class="right">Available</th><th class="right">Actions</th></tr></thead><tbody id="balRows"></tbody></table></div>
+  </section>
+</main>
+<script src="js/app.js"></script>
+<script src="js/leave-policy.js"></script>
+</body>
+</html>
