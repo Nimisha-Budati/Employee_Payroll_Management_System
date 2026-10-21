@@ -120,6 +120,7 @@ class AssistantConversationTests(AssistantTestCase):
     def test_salary_assistant_uses_real_structure_and_payslip(self):
         admin = self.login(self.admin)
         admin.post('/api/payroll/run/', {'year': 2025, 'month': 6, 'lop_mode': 'NONE'}, format='json')
+        admin.post('/api/payroll/variance/review/', {'year': 2025, 'month': 6, 'acknowledge_flags': True}, format='json')
         admin.post('/api/payroll/finalize/', {'year': 2025, 'month': 6}, format='json')
         slip = Payslip.objects.get(employee=self.asha.user)
         client = self.login(self.asha.user)

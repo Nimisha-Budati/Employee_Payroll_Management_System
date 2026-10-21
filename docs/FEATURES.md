@@ -37,6 +37,14 @@ For installation and configuration, see the [README](../README.md).
 26. [Sending notifications with expiry](#26-sending-notifications-with-expiry)
 27. [AI-powered assistance](#27-ai-powered-assistance)
 28. [Departments, designations and analytics](#28-departments-designations-and-analytics)
+29. [Payroll variance review](#29-payroll-variance-review)
+30. [Attendance correction requests](#30-attendance-correction-requests)
+31. [Team calendar](#31-team-calendar)
+32. [Analytics and reports](#32-analytics-and-reports)
+33. [Employee onboarding](#33-employee-onboarding)
+34. [Document expiry and reminders](#34-document-expiry-and-reminders)
+35. [Notification preferences and audit improvements](#35-notification-preferences-and-audit-improvements)
+36. [AI assistant: new topics and evidence](#36-ai-assistant-new-topics-and-evidence)
 
 ---
 
@@ -917,3 +925,102 @@ Each answer shows **"Based on: …"** with the records used (for example *Paysli
 - **Admin dashboard analytics:** active employees, latest payroll, pending approvals (leave, WFH, documents, overtime), today's check-ins with late count, a 14-day attendance chart, lateness this month, leave statistics for the year (pending/approved/rejected counts and approved days by type), payroll trend and headcount by department.
 - **Employee dashboard:** today's shift and lateness, late days this month and pending overtime alongside pay, leave and holidays.
 - **Search and filters** now also cover documents (employee, ID, title, type) and work-from-home requests (employee), in addition to employees, attendance, leave, overtime, payroll, shift records and the audit log (module, date range, IP).
+## 29. Payroll variance review
+
+**Who:** administrators. **Where:** *Payroll runs → Review & finalise* (`admin-payroll-review.html`), API `GET payroll/variance/`, `POST payroll/variance/review/`.
+
+**Purpose:** catch mistakes before payslips are published, without changing any salary automatically.
+
+1. Run payroll as before; drafts are created with the existing calculation.
+2. Open the review. Every employee paid in this month or the previous one is listed with the previous net, this month's net and the change. *Flagged only* shows rows that need attention.
+3. **Details** shows each component side by side (basic, HRA, DA, allowances, overtime, bonus, gross, PF, professional tax, TDS, other deductions, loss of pay, total deductions, net; plus working days, LOP days and overtime hours) with the amount and % change, and the reasons.
+4. Click **Mark as reviewed**. If anything is flagged, tick *I have checked the flagged employees* or write a note.
+5. **Finalise** is enabled only while the review is current. Adjusting, recalculating, deleting or generating a draft afterwards makes the review out of date; review again. `payroll/finalize/` returns 409 `review_required` otherwise.
+
+| Flag | Severity | Rule |
+| --- | --- | --- |
+| Net change | check / high | Net salary changed by ≥ 10% / ≥ 20% (`PAYROLL_VARIANCE_THRESHOLD_PERCENT`) |
+| Net zero | high | Net salary is zero |
+| Missing | high | Paid last month, still active, no payslip this month (with the reason, e.g. no salary structure) |
+| LOP high | check / high | Loss-of-pay days rose by 2 or more / at least half the working days |
+| Overtime high | check | Overtime pay above 25% of the fixed monthly gross |
+| Stale | check | The draft no longer matches current records (e.g. an approved correction or overtime); recalculate |
+| Manual | info | The draft was adjusted by hand (who and when) |
+| Structure | info | Fixed components, PF %, professional tax or TDS changed |
+| New / Left | info | No payslip last month (new joiner) / employee deactivated (so totals still reconcile) |
+
+**Reasons** come from stored data: salary-structure changes with who updated it and when, loss-of-pay days split into unpaid leave, working days without a check-in/approved leave/WFH (with dates) and days before joining, approved overtime records, whether a bonus came from the structure or was set on the payslip, holidays that changed working days, role changes and payslip notes. Reviews and finalisation are recorded in the audit log (module *Payroll*).
+
+## 30. Attendance correction requests
+
+**Who:** employees request; administrators decide. **Where:** *Attendance & shift → Request correction* (employee), *People → Attendance corrections* (`admin-corrections.html`). API `attendance/corrections/`, `…/<id>/review/`, `…/<id>/cancel/`.
+
+**Employee steps:** click *Request correction* (or *Correct* on a day in *Recent attendance*), choose the date and type, enter the correct time(s) and a reason, and send. The *Correction requests* table shows recorded → requested times, the status and the administrator's response; *Cancel* is available while pending.
+
+| Type | Needs |
+| --- | --- |
+| Missed check-in | No check-in recorded; check-in time (check-out optional) |
+| Missed check-out | A check-in and no check-out; check-out time |
+| Incorrect check-in or check-out time | A recorded check-in; at least one changed time |
+| Worked but no attendance recorded | No check-in recorded; both times |
+
+**Rules:** date not in the future, within the last 60 days (`ATTENDANCE_CORRECTION_WINDOW_DAYS`), not before joining, and not in a month whose payroll is finalised; times not in the future; check-out after check-in and within 24 hours (tick *next day* for overnight shifts); one pending request per day (also a database constraint); reason of at least 5 characters. Administrators cannot submit requests and employees cannot edit attendance directly.
+
+**Administrator steps:** filter by status (pending by default), type, department, attendance dates or search; compare recorded and requested values; **Approve** (optional note) or **Reject** (reason required). Approval updates the attendance record, marks it *Corrected*, and recalculates the shift snapshot and late minutes when the check-in changes. Approval is refused if that month's payroll was finalised in the meantime.
+
+**Audit and notifications:** the audit entry (module *Attendance*) stores the original and corrected times, the approver, the employee's reason, the note and the time. Administrators are notified of new and cancelled requests; the employee is notified of the decision.
+
+## 31. Team calendar
+
+**Who:** everyone. **Where:** *Company → Team calendar* (`calendar.html`), API `GET calendar/`.
+
+- Month grid (Monday first) with today highlighted and holiday days tinted; up to three events per day plus *+N more*; click a day for its full list. Below the grid, an event list for the month. On phones only the list is shown.
+- Event types (toggle each): approved leave (amber), approved work from home (blue), shifts (green), holidays (red). Pending or rejected requests are never shown.
+- **Administrators** see all active employees; filters for department, employee and a custom date range (up to 62 days, shown as a list). Explicit shift assignments are shown; a note names the default shift used by everyone else.
+- **Employees:** *My schedule* shows their own leave (with type), WFH, their shift for each day and holidays. *Team availability* adds colleagues from their own department, shown only as *On leave* or *Working from home* with dates; leave types, reasons and colleagues' shifts are never sent to the browser. Department and employee filters are ignored for employees.
+
+## 32. Analytics and reports
+
+**Who:** administrators. **Where:** *Payroll → Analytics* (`admin-analytics.html`), API `GET reports/analytics/`, Excel `GET reports/excel/analytics/`.
+
+- **Filters:** from/to month (up to 24 months; quick 3/6/12-month buttons) and department.
+- **Summary cards** with the change against the previous period of the same length: payroll cost (gross on payslips), average monthly cost and net pay, overtime cost and hours (approved overtime), headcount at the end with joiners and leavers, late check-ins and late rate, absenteeism (loss-of-pay days ÷ working days on payslips), leave days taken.
+- **Charts:** payroll cost by month, overtime cost by month, late rate and absenteeism by month, headcount with joiners and leavers.
+- **Tables:** departments (active headcount, payroll cost, net pay, overtime, late check-ins, leave days), leave utilisation for the current leave year (entitled days incl. carry-forward and adjustments, used, pending, utilisation %), monthly check-ins, late count with average late minutes, leave days and absenteeism.
+- Notes explain drafts included in totals and employees whose deactivation date is unknown. Empty periods show an explanatory empty state.
+- **Excel:** three sheets (monthly trends, departments, leave utilisation) with totals; text is always stored as text. Existing employee, attendance, leave, overtime and payroll Excel reports and the CSV payroll register are unchanged.
+
+Headcount uses the *deactivated on* date now recorded when an employee is deactivated (and cleared on reactivation); the migration filled it from earlier audit entries where possible.
+
+## 33. Employee onboarding
+
+**Who:** employees see their checklist; administrators review. **Where:** employee dashboard; *People → Onboarding* (`admin-onboarding.html`). API `onboarding/`, `onboarding/me/`, `onboarding/settings/`, `onboarding/<id>/complete|reopen|remind/`.
+
+**Checklist** (computed live; no extra personal data is stored): first and last name, email, phone, department and designation (admin), postal address (setting, on by default), profile photo (setting, off by default), each required document type (setting; default identity proof and address proof), counted once **verified** and not expired, and the salary structure (admin; setting, on by default).
+
+**States:** *In progress* → *Ready for review* (all items done; administrators are notified once) → *Completed* (an administrator marked it complete; the employee is notified). If an item stops being satisfied (e.g. a document expires) a ready checklist goes back to in progress.
+
+**Administrator actions:** tabs for open, ready, in progress and completed with counts; search and department filter; *Checklist* (each item with its state and who must act); *Remind* (notifies the employee of items they must provide); *Complete* (refused with the list of missing items while anything is missing; optional note); *Reopen* (reason required); *Checklist settings*. All actions are audited (module *Employees*). Employees who existed before this feature were marked completed by the migration so they are not asked again. Creating, editing, deactivating and reactivating employees work as before.
+
+## 34. Document expiry and reminders
+
+**Expiry:** employees can enter an optional *Expiry date* when uploading (it cannot be in the past); administrators can set it while verifying or later with *Expiry* (`PUT documents/<id>/expiry/`, audited). The expiry status (*Valid*, *Expiring soon* within the largest reminder day, *Expired*, *No expiry*) is a separate column from the review status, and both document pages filter by it. Dashboards show expired and expiring counts with links. Files stay private (owner and administrators only).
+
+**Reminders** (`accounts/reminders.py`; Settings → *Automatic reminders*):
+- Documents: the employee and administrators are reminded when the days left first reach a reminder day (default 30, 7, 1; configurable) and once when the document expires. If several days were missed, only the nearest is sent.
+- Pending approvals: one digest per day to administrators listing leave, WFH, corrections, overtime and documents waiting at least *N* days (default 2).
+- Onboarding: one reminder per week to employees with items they must provide.
+- Every reminder is recorded (`ReminderLog`) so it is never sent twice. Reminders run automatically when a dashboard is opened (at most every 6 hours), via *Send due reminders now*, or with `python manage.py send_reminders` (schedule daily). Reminders can be switched off.
+
+## 35. Notification preferences and audit improvements
+
+- **Preferences** (*Settings → Notifications*, `notifications/preferences/`): switch off optional kinds: announcements, attendance, chat, attendance corrections, documents, holidays, leave, overtime, reminders, shifts and work from home. Security alerts (password reset or change, Google connected or disconnected), payslip and employee-record messages, onboarding and messages sent by an administrator cannot be switched off. Muted kinds are not created for that user.
+- **Notifications page:** *All / Unread* tabs with the unread count, a type filter and *Mark all as read*; opening a notification marks it read. The API also returns unread counts per type.
+- **Audit log:** new filters for employee (the person an action was about, e.g. whose leave was approved, or who did it), action and module (options from recorded entries), plus date range and search, and a new *Employee* column. Newly audited: correction decisions, payroll reviews, onboarding complete/reopen/remind, onboarding and reminder settings, reminder runs, expiry changes and reactivation. Entries are append-only: the API is read-only for administrators, employees get 403, and the model refuses to update or delete an entry.
+
+## 36. AI assistant: new topics and evidence
+
+- The assistant now also retrieves, for the signed-in user only, their **attendance correction requests** (status and the administrator's note), their **onboarding checklist**, and the **expiry** of their documents (separate from review status).
+- Leave answers include the **leave rules configured by administrators** (leave-year dates, notice period, per-request limit, past dates) alongside the live balance from the database.
+- The model is instructed to **name the record or policy** behind each figure; the *Based on:* line lists the records used.
+- Unchanged: the employee is identified from the session (IDs typed in a message are ignored), questions about other people are refused before any data is fetched, only the records needed for the question are sent, history, rename, pin and search work as before, and Gemini errors fall back to answers built from the records.

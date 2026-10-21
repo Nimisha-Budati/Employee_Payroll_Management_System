@@ -22,6 +22,7 @@ from accounts.utils import is_admin_user
 from .calculator import apply_amounts, build_payslip_values, month_bounds
 from .models import Payslip, SalaryStructure
 from .pdf import render_payslip_pdf
+from .variance import review_is_current
 from .serializers import (
     FinalizeSerializer, PayslipAdjustmentSerializer, PayslipSerializer, RunPayrollSerializer,
     SalaryStructureSerializer,
@@ -104,8 +105,10 @@ def salary_structure_detail(request, employee_pk):
         record_audit(
             request, 'CREATE' if created else 'UPDATE', 'SalaryStructure', employee.pk,
             f'{"Set" if created else "Updated"} salary structure for {employee.employee_id} '
-            f'(gross {structure.gross_monthly}/month).',
+            f'(gross {structure.gross_monthly}/month).', subject=employee.user,
         )
+    from accounts.onboarding import refresh as refresh_onboarding
+    refresh_onboarding(employee)
     notify_user(
         employee.user, 'EMPLOYEE', 'Salary structure updated',
         'Your salary structure was updated by an administrator.', 'employee-payslips.html', actor=request.user,
@@ -209,7 +212,7 @@ def payslip_detail(request, pk):
     record_audit(
         request, 'ADJUST', 'Payslip', pk,
         f'Adjusted draft payslip {payslip.employee_code} {_period_label(payslip.year, payslip.month)}: '
-        f'{", ".join(sorted(data))}.',
+        f'{", ".join(sorted(data))}.', subject=payslip.employee,
     )
     return Response(PayslipSerializer(payslip).data)
 
@@ -315,6 +318,10 @@ def payroll_finalize(request):
         drafts = list(drafts.select_related('employee'))
         if not drafts:
             return Response({'detail': 'There are no draft payslips to finalise.'}, status=status.HTTP_400_BAD_REQUEST)
+        if not review_is_current(year, month):
+            return Response({'detail': f'Review the variance preview for {_period_label(year, month)} before finalising. '
+                                       'Drafts changed after the last review need a new review.',
+                             'code': 'review_required'}, status=status.HTTP_409_CONFLICT)
         now = timezone.now()
         Payslip.objects.filter(pk__in=[payslip.pk for payslip in drafts]).update(status=Payslip.PAID, paid_at=now, updated_at=now)
         record_audit(request, 'FINALIZE', 'Payroll', f'{year}-{month:02d}',

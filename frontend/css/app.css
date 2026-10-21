@@ -326,7 +326,7 @@ a.stat:hover { text-decoration: none; border-color: var(--border-strong); }
 .alert-success { background: var(--success-soft); border-color: color-mix(in srgb, var(--success) 30%, transparent); color: var(--success); }
 
 /* ---------- Tables ---------- */
-.table-wrap { overflow-x: auto; }
+.table-wrap { overflow-x: auto; position: relative; }   /* contains .sr-only labels inside wide tables */
 table.table { width: 100%; border-collapse: collapse; }
 .table th { padding: 10px 16px; text-align: left; font-size: 12px; font-weight: 600; letter-spacing: .03em; text-transform: uppercase; color: var(--text-muted); background: var(--surface-muted); border-bottom: 1px solid var(--border); white-space: nowrap; }
 .table td { padding: 12px 16px; border-bottom: 1px solid var(--border); vertical-align: middle; }
@@ -637,3 +637,78 @@ button.cal-day:hover { background: var(--surface-hover); }
 .row-muted td { opacity: .62; }
 .table-compact th, .table-compact td { padding-top: 8px; padding-bottom: 8px; }
 .leave-types-table td:first-child { min-width: 220px; }
+
+/* ---- Team calendar ---- */
+.tc-toolbar { justify-content: space-between; flex-wrap: wrap; }
+.tc-nav { display: flex; align-items: center; gap: 8px; }
+.tc-title { margin: 0; font-size: 18px; min-width: 170px; text-align: center; }
+.tc-filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.tc-types { display: flex; flex-wrap: wrap; gap: 8px 18px; border: 0; margin: 0; padding: 0 20px 12px; }
+.tc-type { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; }
+.ev-leave { --ev: var(--warning); --ev-soft: var(--warning-soft); }
+.ev-wfh { --ev: var(--info); --ev-soft: var(--info-soft); }
+.ev-shift { --ev: var(--accent); --ev-soft: var(--accent-soft); }
+.ev-holiday { --ev: var(--danger); --ev-soft: var(--danger-soft); }
+.tc-swatch { width: 10px; height: 10px; border-radius: 3px; background: var(--ev); flex: none; }
+.tc-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+.tc-head { padding: 8px; font-size: 12px; font-weight: 600; color: var(--text-muted); background: var(--surface-muted); border-bottom: 1px solid var(--border); text-align: center; }
+.tc-cell { min-height: 108px; padding: 4px; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); background: var(--surface); min-width: 0; }
+.tc-cell:nth-child(7n) { border-right: 0; }
+.tc-cell.outside { background: var(--surface-muted); }
+.tc-cell.outside .tc-day { color: var(--text-subtle); }
+.tc-cell.holiday { background: color-mix(in srgb, var(--danger-soft) 55%, var(--surface)); }
+.tc-day { border: 0; background: none; color: var(--text); font-weight: 600; font-size: 13px; width: 28px; height: 28px; border-radius: 50%; cursor: pointer; }
+.tc-day:hover, .tc-day:focus-visible { background: var(--surface-hover); }
+.tc-cell.today .tc-day { background: var(--accent-solid); color: var(--on-accent); }
+.tc-chips { list-style: none; margin: 2px 0 0; padding: 0; display: grid; gap: 2px; }
+.tc-chip { font-size: 11.5px; line-height: 1.3; padding: 2px 6px; border-radius: 5px; background: var(--ev-soft); color: var(--ev); border-left: 3px solid var(--ev); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tc-more button { border: 0; background: none; color: var(--accent); font-size: 11.5px; padding: 2px 6px; cursor: pointer; }
+.tc-loading { display: flex; gap: 8px; align-items: center; color: var(--text-muted); padding: 32px; justify-content: center; }
+.tc-agenda-title { font-size: 15px; margin: 22px 0 10px; }
+.tc-agenda { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.tc-agenda li { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border: 1px solid var(--border); border-left: 3px solid var(--ev); border-radius: var(--radius-sm); background: var(--surface); }
+.tc-agenda .tc-swatch { margin-top: 5px; }
+@media (max-width: 760px) {
+  .tc-grid-wrap { display: none; }
+  .tc-agenda-title { margin-top: 4px; }
+  .tc-title { min-width: 0; font-size: 16px; }
+}
+
+/* ---- Payroll variance review ---- */
+.variance-flags { display: flex; flex-wrap: wrap; gap: 4px; }
+.variance-reasons { margin: 6px 0 0; padding-left: 18px; color: var(--text-muted); font-size: 13px; }
+.variance-reasons li { margin: 2px 0; }
+.change-up { color: var(--success); }
+.change-down { color: var(--danger); }
+.row-flag-high td:first-child { box-shadow: inset 3px 0 0 var(--danger); }
+.row-flag-medium td:first-child { box-shadow: inset 3px 0 0 var(--warning); }
+.details-row td { background: var(--surface-muted); }
+.component-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.component-table th, .component-table td { padding: 6px 8px; border-bottom: 1px solid var(--border); text-align: right; }
+.component-table th:first-child, .component-table td:first-child { text-align: left; }
+.component-table tr.is-changed td { font-weight: 600; }
+.review-box { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; }
+
+/* ---- Analytics ---- */
+.compare { font-size: 12px; font-weight: 600; }
+.legend { display: flex; flex-wrap: wrap; gap: 12px; font-size: 12px; color: var(--text-muted); margin-bottom: 8px; }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.legend i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+.line-chart .line { fill: none; stroke-width: 2.5; }
+.line-chart .dot { stroke: var(--surface); stroke-width: 1.5; }
+.series-1 { stroke: var(--accent); fill: var(--accent); background: var(--accent); }
+.series-2 { stroke: var(--warning); fill: var(--warning); background: var(--warning); }
+.series-3 { stroke: var(--info); fill: var(--info); background: var(--info); }
+
+/* ---- Onboarding ---- */
+.onboarding-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.onboarding-list li { display: flex; gap: 10px; align-items: flex-start; }
+.onboarding-list .check-mark { flex: none; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; background: var(--neutral-soft); color: var(--text-subtle); }
+.onboarding-list li.done .check-mark { background: var(--success-soft); color: var(--success); }
+.onboarding-list .check-mark .icon { width: 14px; height: 14px; }
+.progress-label { display: flex; justify-content: space-between; font-size: 13px; color: var(--text-muted); margin-bottom: 6px; }
+.pref-list { display: grid; gap: 10px; }
+.pref-list .check { justify-content: space-between; }
+
+button.stat { font: inherit; text-align: left; cursor: pointer; width: 100%; }
+button.stat:hover { border-color: var(--border-strong); }

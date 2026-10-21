@@ -5,7 +5,7 @@ from math import asin, cos, radians, sin, sqrt
 from django.conf import settings
 from django.contrib.auth.models import User
 from django.db import transaction
-from django.db.models import Q
+from django.db.models import Count, Q
 from django.http import FileResponse, Http404
 from django.utils import timezone
 from django.utils.dateparse import parse_date
@@ -16,7 +16,8 @@ from rest_framework.response import Response
 
 from .audit import record_audit
 from .models import LeaveType, AuditLog, Announcement, AttendanceRecord, AttendanceSettings, ChatConversation, ChatMessage, Notification, NotificationBroadcast, UserProfile, LeaveRequest, Employee, EmployeeDocument, Holiday, WorkFromHomeRequest
-from .notifications import notify_admins as _notify_admins, notify_role as _notify_role, notify_user as _notify_user
+from .onboarding import refresh_for_user as _refresh_onboarding
+from .notifications import optional_kinds as _optional_kinds, notify_admins as _notify_admins, notify_role as _notify_role, notify_user as _notify_user
 from .pagination import maybe_paginate
 from .permissions import IsAdminUserRole
 from .leave_policy import carry_forward as _carry_forward, leave_year_bounds as _leave_year_bounds, leave_year_label as _leave_year_label, leave_year_of as _leave_year_of, policy_settings as _leave_rules
@@ -233,7 +234,8 @@ def leave_balance_adjust(request):
     row.adjustment, row.note, row.updated_by = adjustment, note, request.user
     row.save()
     record_audit(request, 'ADJUST', 'LeavePolicy', row.pk,
-                 f'Set {leave_type.name} adjustment for {user.username} in {year} to {adjustment:+d} day(s): {note or "no note"}.')
+                 f'Set {leave_type.name} adjustment for {user.username} in {year} to {adjustment:+d} day(s): {note or "no note"}.',
+                 subject=user)
     return Response({'year': year, 'balances': leave_balance_for(user, year)})
 
 
@@ -259,7 +261,8 @@ def leave_update_status(request, pk):
         leave_req.save()
         record_audit(request, 'APPROVE' if new_status == 'APPROVED' else 'REJECT', 'Leave', leave_req.pk,
                      f'{new_status.title()} {leave_req.leave_type} for {leave_req.employee.username} '
-                     f'({leave_req.start_date} to {leave_req.end_date}, {leave_req.number_of_days} day(s)).')
+                     f'({leave_req.start_date} to {leave_req.end_date}, {leave_req.number_of_days} day(s)).',
+                     subject=leave_req.employee)
 
     decision = 'approved' if new_status == 'APPROVED' else 'rejected'
     detail = f' Reason: {leave_req.rejection_reason}' if leave_req.rejection_reason else ''
@@ -342,13 +345,13 @@ def employee_list_create(request):
             designation=data['designation'],
             joining_date=data['joining_date'],
         )
-        record_audit(request, 'CREATE', 'Employee', employee.pk, f'Added employee {employee.employee_id} ({user.username}).')
+        record_audit(request, 'CREATE', 'Employee', employee.pk, f'Added employee {employee.employee_id} ({user.username}).', subject=user)
 
     _notify_user(
         user,
         'EMPLOYEE',
         'Welcome to PayrollPro',
-        'Your employee record is ready. You can now use the employee portal.',
+        'Your employee record is ready. Your dashboard shows the onboarding checklist of details and documents to provide.',
         'employee-dashboard.html',
         actor=request.user,
     )
@@ -391,8 +394,9 @@ def employee_detail(request, pk):
             employee.user.is_active = False
             employee.user.save(update_fields=['is_active'])
             employee.status = 'INACTIVE'
-            employee.save(update_fields=['status'])
-            record_audit(request, 'DEACTIVATE', 'Employee', employee.pk, f'Deactivated employee {employee.employee_id}.')
+            employee.deactivated_at = timezone.localdate()
+            employee.save(update_fields=['status', 'deactivated_at'])
+            record_audit(request, 'DEACTIVATE', 'Employee', employee.pk, f'Deactivated employee {employee.employee_id}.', subject=employee.user)
         return Response({'detail': 'Employee deactivated.'})
 
     serializer = EmployeeWriteSerializer(employee, data=request.data, partial=True)
@@ -415,13 +419,19 @@ def employee_detail(request, pk):
                 changed.append(field)
         if 'status' in data:
             user.is_active = data['status'] == 'ACTIVE'
+            if 'status' in changed:
+                employee.deactivated_at = None if data['status'] == 'ACTIVE' else timezone.localdate()
         user.save()
         employee.save()
         if 'phone' in data:
             UserProfile.objects.filter(user=user).update(phone=data['phone'])
         if changed:
-            record_audit(request, 'UPDATE', 'Employee', employee.pk,
-                         f'Updated {employee.employee_id}: {", ".join(sorted(set(changed)))}.')
+            action = 'UPDATE'
+            if 'status' in changed:
+                action = 'REACTIVATE' if data['status'] == 'ACTIVE' else 'DEACTIVATE'
+            record_audit(request, action, 'Employee', employee.pk,
+                         f'Updated {employee.employee_id}: {", ".join(sorted(set(changed)))}.', subject=user)
+    _refresh_onboarding(employee.user)
     return Response(EmployeeSerializer(_employee_queryset().get(pk=pk)).data)
 
 
@@ -447,7 +457,21 @@ def document_list_create(request):
             documents = documents.filter(status=params['status'])
         if params.get('document_type') in dict(EmployeeDocument.DOCUMENT_TYPES):
             documents = documents.filter(document_type=params['document_type'])
-        serializer = EmployeeDocumentSerializer(documents.order_by('-uploaded_at'), many=True, context={'request': request})
+        expiry = params.get('expiry')
+        ordering = ('-uploaded_at',)
+        if expiry in ('EXPIRED', 'EXPIRING', 'VALID', 'NONE', 'TRACKED'):
+            today = timezone.localdate()
+            soon = today + timedelta(days=_reminder_settings().warning_window_days)
+            documents = {
+                'EXPIRED': documents.filter(expiry_date__lt=today),
+                'EXPIRING': documents.filter(expiry_date__gte=today, expiry_date__lte=soon),
+                'VALID': documents.filter(expiry_date__gt=soon),
+                'NONE': documents.filter(expiry_date__isnull=True),
+                'TRACKED': documents.filter(expiry_date__isnull=False),
+            }[expiry]
+            if expiry != 'NONE':
+                ordering = ('expiry_date', '-uploaded_at')
+        serializer = EmployeeDocumentSerializer(documents.order_by(*ordering), many=True, context={'request': request})
         return Response(serializer.data)
 
     if _is_admin(request.user):
@@ -463,6 +487,7 @@ def document_list_create(request):
             'admin-documents.html',
             actor=request.user,
         )
+        _refresh_onboarding(request.user)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -495,6 +520,7 @@ def document_delete(request, pk):
         return Response({'detail': 'Only documents awaiting review can be deleted.'}, status=status.HTTP_400_BAD_REQUEST)
     document.file.delete(save=False)
     document.delete()
+    _refresh_onboarding(request.user)
     return Response(status=status.HTTP_204_NO_CONTENT)
 
 
@@ -512,11 +538,18 @@ def document_review(request, pk):
     if new_status == 'REJECTED' and not str(request.data.get('review_note', '')).strip():
         return Response({'detail': 'A rejection reason is required.'}, status=status.HTTP_400_BAD_REQUEST)
 
+    if 'expiry_date' in request.data:
+        expiry, error = _parse_expiry(request.data.get('expiry_date'))
+        if error:
+            return Response({'expiry_date': [error]}, status=status.HTTP_400_BAD_REQUEST)
+        document.expiry_date = expiry
     document.status = new_status
     document.review_note = str(request.data.get('review_note', '')).strip()
     document.save()
     record_audit(request, 'VERIFY' if new_status == 'VERIFIED' else 'REJECT', 'Document', document.pk,
-                 f'{new_status.title()} document "{document.title}" of {document.employee.username}.')
+                 f'{new_status.title()} document "{document.title}" of {document.employee.username}'
+                 f'{f" (expires {document.expiry_date})" if document.expiry_date else ""}.', subject=document.employee)
+    _refresh_onboarding(document.employee)
     review_message = f'Your document “{document.title}” was {new_status.lower()}.'
     if document.review_note:
         review_message += f' Note: {document.review_note}'
@@ -528,6 +561,42 @@ def document_review(request, pk):
         'employee-documents.html',
         actor=request.user,
     )
+    return Response(EmployeeDocumentSerializer(document, context={'request': request}).data)
+
+
+def _reminder_settings():
+    from .models import ReminderSettings
+
+    return ReminderSettings.load()
+
+
+def _parse_expiry(value):
+    """(date or None, error message or None) for an expiry date sent by an administrator."""
+    if value in (None, ''):
+        return None, None
+    parsed = parse_date(str(value))
+    if parsed is None:
+        return None, 'Use YYYY-MM-DD.'
+    return parsed, None
+
+
+@api_view(['PUT'])
+@permission_classes([IsAuthenticated, IsAdminUserRole])
+def document_expiry(request, pk):
+    """Set, change or clear a document's expiry date (the review status is not affected)."""
+    document = EmployeeDocument.objects.select_related('employee').filter(pk=pk).first()
+    if document is None:
+        return Response({'detail': 'Document not found.'}, status=status.HTTP_404_NOT_FOUND)
+    expiry, error = _parse_expiry(request.data.get('expiry_date'))
+    if error:
+        return Response({'expiry_date': [error]}, status=status.HTTP_400_BAD_REQUEST)
+    before = document.expiry_date
+    document.expiry_date = expiry
+    document.save(update_fields=['expiry_date', 'updated_at'])
+    record_audit(request, 'UPDATE', 'Document', document.pk,
+                 f'Changed expiry of "{document.title}" ({document.employee.username}) from {before or "none"} to {expiry or "none"}.',
+                 subject=document.employee)
+    _refresh_onboarding(document.employee)
     return Response(EmployeeDocumentSerializer(document, context={'request': request}).data)
 
 
@@ -544,6 +613,7 @@ def my_profile(request):
     serializer = ProfileSerializer(profile, data=request.data, partial=True, context={'request': request})
     if serializer.is_valid():
         serializer.save()
+        _refresh_onboarding(request.user)
         return Response(serializer.data)
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -879,7 +949,8 @@ def wfh_detail(request, pk):
     item.status, item.admin_note = new_status, note
     item.save()
     record_audit(request, 'APPROVE' if new_status == 'APPROVED' else 'REJECT', 'WFH', item.pk,
-                 f'{new_status.title()} WFH for {item.employee.username} ({item.start_date} to {item.end_date}).')
+                 f'{new_status.title()} WFH for {item.employee.username} ({item.start_date} to {item.end_date}).',
+                 subject=item.employee)
     _notify_user(
         item.employee,
         'WFH',
@@ -1045,11 +1116,43 @@ def _visible_notifications(user):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def notification_list(request):
-    notifications = _visible_notifications(request.user).select_related('actor')[:100]
-    unread_count = _visible_notifications(request.user).filter(read_at__isnull=True).count()
+    visible = _visible_notifications(request.user)
+    notifications = visible.select_related('actor')
+    if request.query_params.get('unread') == 'true':
+        notifications = notifications.filter(read_at__isnull=True)
+    if request.query_params.get('kind') in dict(Notification.KIND_CHOICES):
+        notifications = notifications.filter(kind=request.query_params['kind'])
+    unread = visible.filter(read_at__isnull=True)
     return Response({
-        'unread_count': unread_count,
-        'notifications': NotificationSerializer(notifications, many=True).data,
+        'unread_count': unread.count(),
+        'unread_by_kind': {row['kind']: row['n'] for row in unread.order_by().values('kind').annotate(n=Count('id'))},
+        'notifications': NotificationSerializer(notifications[:100], many=True).data,
+    })
+
+
+@api_view(['GET', 'PUT'])
+@permission_classes([IsAuthenticated])
+def notification_preferences(request):
+    """Optional notification kinds a user can switch off. Security and other mandatory kinds are always on."""
+    from .models import NotificationPreference
+
+    optional = dict(_optional_kinds())
+    if request.method == 'PUT':
+        values = request.data.get('preferences')
+        if not isinstance(values, dict) or not values:
+            return Response({'preferences': ['Send {kind: true|false} pairs.']}, status=status.HTTP_400_BAD_REQUEST)
+        mandatory = [kind for kind in values if kind in Notification.MANDATORY_KINDS]
+        if mandatory:
+            return Response({'preferences': [f'{", ".join(mandatory)} notifications cannot be switched off.']}, status=status.HTTP_400_BAD_REQUEST)
+        unknown = [kind for kind in values if kind not in optional]
+        if unknown or not all(isinstance(value, bool) for value in values.values()):
+            return Response({'preferences': ['Unknown notification type or a value that is not true/false.']}, status=status.HTTP_400_BAD_REQUEST)
+        for kind, enabled in values.items():
+            NotificationPreference.objects.update_or_create(user=request.user, kind=kind, defaults={'enabled': enabled})
+    saved = dict(NotificationPreference.objects.filter(user=request.user).values_list('kind', 'enabled'))
+    return Response({
+        'optional': [{'kind': kind, 'label': label, 'enabled': saved.get(kind, True)} for kind, label in optional.items()],
+        'mandatory': [{'kind': kind, 'label': dict(Notification.KIND_CHOICES)[kind]} for kind in Notification.MANDATORY_KINDS],
     })
 
 
@@ -1183,11 +1286,27 @@ def audit_log_list(request):
         logs = logs.filter(action=params['action'])
     if params.get('module'):
         logs = logs.filter(module=params['module'])
+    if params.get('employee'):
+        value = str(params['employee'])
+        logs = logs.filter(Q(subject_id=value) | Q(actor_id=value)) if value.isdigit() else logs.none()
+    if params.get('actor'):
+        logs = logs.filter(actor_id=params['actor']) if str(params['actor']).isdigit() else logs.none()
     for param, lookup in (('from', 'created_at__date__gte'), ('to', 'created_at__date__lte')):
         parsed = parse_date(params.get(param, '') or '')
         if parsed:
             logs = logs.filter(**{lookup: parsed})
     search = params.get('search', '').strip()
     if search:
-        logs = logs.filter(Q(summary__icontains=search) | Q(actor_name__icontains=search) | Q(ip_address__icontains=search))
+        logs = logs.filter(Q(summary__icontains=search) | Q(actor_name__icontains=search) | Q(subject_name__icontains=search)
+                           | Q(ip_address__icontains=search))
     return maybe_paginate(request, logs, AuditLogSerializer)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated, IsAdminUserRole])
+def audit_log_meta(request):
+    """Distinct modules and actions recorded so far, for the audit filters."""
+    return Response({
+        'modules': sorted(filter(None, AuditLog.objects.order_by().values_list('module', flat=True).distinct())),
+        'actions': sorted(filter(None, AuditLog.objects.order_by().values_list('action', flat=True).distinct())),
+    })

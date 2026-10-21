@@ -370,7 +370,7 @@ def overtime_review(request, pk):
         record.save()
         record_audit(request, 'APPROVE' if new_status == OvertimeRecord.APPROVED else 'REJECT', 'Overtime', pk,
                      f'{record.get_status_display()} {record.hours} h overtime for {record.employee.username} on {record.date} '
-                     f'(amount {record.amount}).')
+                     f'(amount {record.amount}).', subject=record.employee)
     decision = record.get_status_display().lower()
     notify_user(record.employee, 'OVERTIME', f'Overtime {decision}',
                 f'Your {record.hours} h of overtime on {record.date:%d %b %Y} was {decision}.{f" Note: {note}" if note else ""}',

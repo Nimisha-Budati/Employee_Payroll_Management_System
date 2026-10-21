@@ -1,7 +1,8 @@
 from django.urls import path
+from . import corrections, onboarding, reminders, team_calendar
 from .google_auth import google_callback, google_config, google_link, google_start
 from .auth_views import change_password, csrf_token, login_user, logout_user, register, request_password_reset, reset_password, verify_password_reset
-from .views import audit_log_list, announcement_detail, announcement_list_create, attendance_history, attendance_list, attendance_mark, attendance_settings, attendance_status, chat_conversation_list_create, chat_employee_list, chat_message_list_create, department_list, department_rename, document_delete, document_file, document_list_create, document_review, employee_detail, employee_list_create, employee_meta, holiday_detail, holiday_list_create, my_profile, notification_broadcast_detail, notification_broadcast_list_create, notification_list, notification_mark_all_read, notification_mark_read, leave_balance, leave_balance_adjust, leave_cancel, leave_carry_forward, leave_list_create, leave_policy_settings, leave_type_detail, leave_type_list_create, leave_update_status, wfh_detail, wfh_list_create
+from .views import audit_log_list, audit_log_meta, document_expiry, notification_preferences, announcement_detail, announcement_list_create, attendance_history, attendance_list, attendance_mark, attendance_settings, attendance_status, chat_conversation_list_create, chat_employee_list, chat_message_list_create, department_list, department_rename, document_delete, document_file, document_list_create, document_review, employee_detail, employee_list_create, employee_meta, holiday_detail, holiday_list_create, my_profile, notification_broadcast_detail, notification_broadcast_list_create, notification_list, notification_mark_all_read, notification_mark_read, leave_balance, leave_balance_adjust, leave_cancel, leave_carry_forward, leave_list_create, leave_policy_settings, leave_type_detail, leave_type_list_create, leave_update_status, wfh_detail, wfh_list_create
 
 urlpatterns = [
     path('csrf/', csrf_token, name='csrf-token'),
@@ -34,12 +35,16 @@ urlpatterns = [
     path('documents/<int:pk>/', document_delete, name='document-delete'),
     path('documents/<int:pk>/file/', document_file, name='document-file'),
     path('documents/<int:pk>/review/', document_review, name='document-review'),
+    path('documents/<int:pk>/expiry/', document_expiry, name='document-expiry'),
     path('profile/', my_profile, name='my-profile'),
     path('holidays/', holiday_list_create, name='holiday-list-create'),
     path('holidays/<int:pk>/', holiday_detail, name='holiday-detail'),
     path('attendance/settings/', attendance_settings, name='attendance-settings'),
     path('attendance/status/', attendance_status, name='attendance-status'),
     path('attendance/history/', attendance_history, name='attendance-history'),
+    path('attendance/corrections/', corrections.correction_list_create, name='correction-list-create'),
+    path('attendance/corrections/<int:pk>/review/', corrections.correction_review, name='correction-review'),
+    path('attendance/corrections/<int:pk>/cancel/', corrections.correction_cancel, name='correction-cancel'),
     path('attendance/<str:action>/', attendance_mark, name='attendance-mark'),
     path('attendance/', attendance_list, name='attendance-list'),
     path('wfh/', wfh_list_create, name='wfh-list-create'),
@@ -51,8 +56,19 @@ urlpatterns = [
     path('chat/conversations/<int:conversation_id>/messages/', chat_message_list_create, name='chat-message-list-create'),
     path('notifications/', notification_list, name='notification-list'),
     path('notifications/read-all/', notification_mark_all_read, name='notification-mark-all-read'),
+    path('notifications/preferences/', notification_preferences, name='notification-preferences'),
     path('notifications/broadcasts/', notification_broadcast_list_create, name='notification-broadcast-list-create'),
     path('notifications/broadcasts/<int:pk>/', notification_broadcast_detail, name='notification-broadcast-detail'),
     path('notifications/<int:pk>/read/', notification_mark_read, name='notification-mark-read'),
     path('audit-logs/', audit_log_list, name='audit-log-list'),
+    path('audit-logs/meta/', audit_log_meta, name='audit-log-meta'),
+    path('calendar/', team_calendar.team_calendar, name='team-calendar'),
+    path('onboarding/', onboarding.onboarding_list, name='onboarding-list'),
+    path('onboarding/me/', onboarding.onboarding_me, name='onboarding-me'),
+    path('onboarding/settings/', onboarding.onboarding_settings, name='onboarding-settings'),
+    path('onboarding/<int:pk>/complete/', onboarding.onboarding_complete, name='onboarding-complete'),
+    path('onboarding/<int:pk>/reopen/', onboarding.onboarding_reopen, name='onboarding-reopen'),
+    path('onboarding/<int:pk>/remind/', onboarding.onboarding_remind, name='onboarding-remind'),
+    path('reminders/settings/', reminders.reminder_settings, name='reminder-settings'),
+    path('reminders/run/', reminders.reminder_run, name='reminder-run'),
 ]

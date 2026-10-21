@@ -1,6 +1,6 @@
 from django.urls import path
 
-from . import dashboard, excel, views
+from . import analytics, dashboard, excel, variance, views
 
 urlpatterns = [
     path('payroll/salary-structures/', views.salary_structure_list, name='salary-structure-list'),
@@ -12,6 +12,9 @@ urlpatterns = [
     path('payroll/payslips/<int:pk>/pdf/', views.payslip_pdf, name='payslip-pdf'),
     path('payroll/run/', views.payroll_run, name='payroll-run'),
     path('payroll/finalize/', views.payroll_finalize, name='payroll-finalize'),
+    path('payroll/variance/', variance.payroll_variance, name='payroll-variance'),
+    path('payroll/variance/review/', variance.payroll_variance_review, name='payroll-variance-review'),
+    path('reports/analytics/', analytics.analytics_report, name='analytics-report'),
     path('payroll/export/', views.payroll_export, name='payroll-export'),
     path('payroll/reports/', views.payroll_reports, name='payroll-reports'),
     path('reports/excel/<str:kind>/', excel.excel_report, name='excel-report'),

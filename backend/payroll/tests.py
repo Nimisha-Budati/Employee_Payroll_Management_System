@@ -224,6 +224,7 @@ class PayrollApiTests(TestCase):
         self.assertEqual(self.client.get('/api/payroll/payslips/').json()['results'], [])  # drafts are hidden
 
         self.client.force_authenticate(self.admin)
+        self.client.post('/api/payroll/variance/review/', {'year': 2025, 'month': 6, 'acknowledge_flags': True}, format='json')
         finalized = self.client.post('/api/payroll/finalize/', {'year': 2025, 'month': 6}, format='json')
         self.assertEqual(finalized.json()['finalized'], 2)
         slip = Payslip.objects.get(employee=self.asha.user)

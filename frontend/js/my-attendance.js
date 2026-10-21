@@ -1,8 +1,14 @@
 (async function () {
   'use strict';
-  const { $, html, icon, fmt, api } = App;
+  const { $, $$, html, icon, fmt, api, field } = App;
   await App.boot({ role: 'EMPLOYEE', nav: 'attendance' });
   $('#insightLink').innerHTML = html`${icon('sparkle')} AI attendance insights`;
+  $('#correctBtn').innerHTML = html`${icon('edit')} Request correction`;
+  const TYPES = [
+    ['MISSED_CHECK_IN', 'Missed check-in'], ['MISSED_CHECK_OUT', 'Missed check-out'],
+    ['WRONG_TIMES', 'Incorrect check-in or check-out time'], ['MISSED_DAY', 'Worked but no attendance recorded'],
+  ];
+  let history = [];
   let status = null;
 
   const shiftHours = shift => `${shift.start_time.slice(0, 5)} – ${shift.end_time.slice(0, 5)}`;
@@ -95,12 +101,90 @@
     rows.innerHTML = App.skeletonRows(7, 5);
     try {
       const list = await api.get('/attendance/history/', { limit: 30 });
-      rows.innerHTML = list.length ? html`${list.map(r => html`<tr><td class="cell-main">${fmt.date(r.date)}</td><td>${r.shift_name || '—'}</td><td>${fmt.time(r.check_in_at)}</td><td class="right">${lateCell(r.late_minutes)}</td><td>${r.check_out_at ? fmt.time(r.check_out_at) : '—'}</td><td class="right num">${r.worked_minutes == null ? '—' : fmt.duration(r.worked_minutes)}</td><td>${App.badge(r.status)}</td></tr>`)}`
-        : App.emptyRow(7, { iconName: 'pin', title: 'No attendance yet', text: 'Your check-ins will be listed here.' });
+      history = list;
+      rows.innerHTML = list.length ? html`${list.map(r => html`<tr><td class="cell-main">${fmt.date(r.date)}${r.is_corrected ? html` ${App.badge('CORRECTED')}` : ''}</td><td>${r.shift_name || '—'}</td><td>${fmt.time(r.check_in_at)}</td><td class="right">${lateCell(r.late_minutes)}</td><td>${r.check_out_at ? fmt.time(r.check_out_at) : '—'}</td><td class="right num">${r.worked_minutes == null ? '—' : fmt.duration(r.worked_minutes)}</td><td>${App.badge(r.status)}</td>
+        <td class="right"><button class="btn btn-sm" type="button" data-correct="${r.date}" aria-label="Request a correction for ${fmt.date(r.date)}">${icon('edit', 'icon-sm')} Correct</button></td></tr>`)}`
+        : App.emptyRow(8, { iconName: 'pin', title: 'No attendance yet', text: 'Your check-ins will be listed here. Use Request correction for a day you worked but could not check in.' });
+      $$('[data-correct]', rows).forEach(b => b.addEventListener('click', () => requestCorrection(b.dataset.correct)));
     } catch (error) {
-      rows.innerHTML = App.errorRow(7, error.message);
+      rows.innerHTML = App.errorRow(8, error.message);
       $('[data-retry]', rows).addEventListener('click', loadHistory);
     }
   }
-  loadStatus(); loadShift(); loadMonth(); loadHistory();
+  /* ---- Attendance correction requests ---- */
+  const clock = value => (value ? fmt.time(value) : '—');
+  const hhmm = value => (value ? new Date(value).toTimeString().slice(0, 5) : '');
+
+  function requestCorrection(day) {
+    const record = history.find(r => r.date === day);
+    const type = !record ? 'MISSED_DAY' : !record.check_out_at ? 'MISSED_CHECK_OUT' : 'WRONG_TIMES';
+    const min = new Date(); min.setDate(min.getDate() - 60);
+    App.modal({
+      title: 'Request attendance correction', submitLabel: 'Send request',
+      body: html`<div class="form-grid">
+        <div class="span-2 alert alert-info">${icon('info')}<span>Your attendance changes only if an administrator approves. You can cancel the request while it is pending.</span></div>
+        ${field({ label: 'Date', name: 'date', type: 'date', required: true, value: day || App.todayISO(), attrs: `max="${App.todayISO()}" min="${fmt.iso(min)}"` })}
+        ${field({ label: 'What needs correcting?', name: 'correction_type', type: 'select', options: TYPES, value: type })}
+        <div class="span-2 muted" id="recorded" aria-live="polite"></div>
+        ${field({ label: 'Correct check-in time', name: 'check_in', type: 'time', value: record ? hhmm(record.check_in_at) : '' })}
+        ${field({ label: 'Correct check-out time', name: 'check_out', type: 'time', value: record ? hhmm(record.check_out_at) : '' })}
+        ${field({ label: 'Check-out was on the next day (overnight shift)', name: 'check_out_next_day', type: 'checkbox', span2: true })}
+        ${field({ label: 'Reason', name: 'reason', type: 'textarea', required: true, span2: true, placeholder: 'e.g. The GPS check-in failed at the gate; I arrived at 09:05.', attrs: 'maxlength="1000" minlength="5"' })}
+      </div>`,
+      onOpen: ({ dialog }) => {
+        const form = $('form', dialog);
+        const sync = () => {
+          const kind = form.elements.correction_type.value;
+          const current = history.find(r => r.date === form.elements.date.value);
+          $('#recorded', dialog).textContent = current
+            ? `Recorded: check-in ${clock(current.check_in_at)}, check-out ${clock(current.check_out_at)}.`
+            : 'No attendance is recorded for this date in your last 30 records.';
+          form.elements.check_in.closest('.field').hidden = kind === 'MISSED_CHECK_OUT';
+          form.elements.check_in.required = ['MISSED_CHECK_IN', 'MISSED_DAY'].includes(kind);
+          form.elements.check_out.required = ['MISSED_CHECK_OUT', 'MISSED_DAY'].includes(kind);
+        };
+        form.elements.correction_type.addEventListener('change', sync);
+        form.elements.date.addEventListener('change', sync);
+        sync();
+      },
+      onSubmit: async (formData, ctx) => {
+        const kind = formData.get('correction_type');
+        await api.post('/attendance/corrections/', {
+          date: formData.get('date'), correction_type: kind, reason: formData.get('reason'),
+          check_in: kind === 'MISSED_CHECK_OUT' ? null : (formData.get('check_in') || null),
+          check_out: formData.get('check_out') || null,
+          check_out_next_day: formData.get('check_out_next_day') === 'on',
+        });
+        ctx.close(); App.toast('Correction request sent for approval.'); loadCorrections();
+      },
+    });
+  }
+
+  async function loadCorrections() {
+    const rows = $('#correctionRows');
+    rows.innerHTML = App.skeletonRows(6, 3);
+    try {
+      const list = await api.get('/attendance/corrections/');
+      rows.innerHTML = list.length ? html`${list.map(c => html`<tr>
+        <td class="cell-main nowrap">${fmt.date(c.date)}</td>
+        <td>${c.correction_type_label}<div class="cell-sub">${c.reason}</div></td>
+        <td class="nowrap"><div>In: ${clock(c.original_check_in)} → <strong>${c.requested_check_in ? clock(c.requested_check_in) : 'unchanged'}</strong></div>
+          <div>Out: ${clock(c.original_check_out)} → <strong>${c.requested_check_out ? clock(c.requested_check_out) : 'unchanged'}</strong></div></td>
+        <td>${App.badge(c.status)}</td>
+        <td>${c.review_note ? c.review_note : html`<span class="subtle">—</span>`}${c.reviewed_at ? html`<div class="cell-sub">${c.reviewed_by_name} · ${fmt.dateTime(c.reviewed_at)}</div>` : ''}</td>
+        <td class="right">${c.status === 'PENDING' ? html`<button class="btn btn-sm btn-danger" type="button" data-cancel="${c.id}">Cancel</button>` : ''}</td></tr>`)}`
+        : App.emptyRow(6, { iconName: 'edit', title: 'No correction requests', text: 'If you forgot to check in or out, use Request correction.' });
+      $$('[data-cancel]', rows).forEach(b => b.addEventListener('click', async () => {
+        const ok = await App.confirm({ title: 'Cancel this request?', message: 'The administrator will no longer see it as pending.', confirmLabel: 'Cancel request', danger: true });
+        if (!ok) return;
+        try { await api.post(`/attendance/corrections/${b.dataset.cancel}/cancel/`); App.toast('Request cancelled.'); loadCorrections(); } catch (error) { App.error(error); }
+      }));
+    } catch (error) {
+      rows.innerHTML = App.errorRow(6, error.message);
+      $('[data-retry]', rows).addEventListener('click', loadCorrections);
+    }
+  }
+  $('#correctBtn').addEventListener('click', () => requestCorrection(App.todayISO()));
+
+  loadStatus(); loadShift(); loadMonth(); loadHistory(); loadCorrections();
 })();

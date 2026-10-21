@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f4f8f6">
+  <script src="js/theme.js"></script>
+  <title>Attendance corrections · PayrollPro</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+<main id="content">
+  <div class="page-header">
+    <div><h1>Attendance corrections</h1><p>Employees' requests to fix a missed or wrong check-in or check-out. Attendance changes only when you approve, and every decision is recorded in the audit log.</p></div>
+  </div>
+  <section class="grid grid-4" id="stats" aria-label="Correction request counts"></section>
+  <section class="card" style="margin-top:20px">
+    <div class="toolbar">
+      <div class="input-group grow"><span id="searchIcon"></span><input class="input" id="search" type="search" placeholder="Search by name or ID" aria-label="Search correction requests"></div>
+      <select class="select" id="status" aria-label="Status"><option value="PENDING">Pending</option><option value="APPROVED">Approved</option><option value="REJECTED">Rejected</option><option value="CANCELLED">Cancelled</option><option value="">All statuses</option></select>
+      <select class="select" id="type" aria-label="Type"><option value="">All types</option></select>
+      <select class="select" id="department" aria-label="Department"><option value="">All departments</option></select>
+      <label class="sr-only" for="from">From</label><input class="input" type="date" id="from" aria-label="Attendance date from" style="width:auto">
+      <label class="sr-only" for="to">To</label><input class="input" type="date" id="to" aria-label="Attendance date to" style="width:auto">
+    </div>
+    <div class="table-wrap"><table class="table">
+      <thead><tr><th>Employee</th><th>Date</th><th>Request</th><th>Recorded</th><th>Requested</th><th>Status</th><th class="right">Actions</th></tr></thead>
+      <tbody id="rows"></tbody>
+    </table></div>
+    <div class="pager" id="pager" hidden></div>
+  </section>
+</main>
+<script src="js/app.js"></script>
+<script src="js/corrections.js"></script>
+</body>
+</html>

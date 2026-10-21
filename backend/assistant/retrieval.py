@@ -19,7 +19,7 @@ from decimal import Decimal
 from django.db.models import Q
 from django.utils import timezone
 
-from accounts.models import AttendanceRecord, EmployeeDocument, Holiday, LeaveRequest, WorkFromHomeRequest
+from accounts.models import AttendanceCorrectionRequest, AttendanceRecord, Employee, EmployeeDocument, Holiday, LeaveRequest, WorkFromHomeRequest
 from accounts.serializers import leave_balance_for
 from accounts.utils import is_admin_user
 from payroll.calculator import EARNING_FIELDS, money
@@ -31,8 +31,9 @@ from .models import AIConversation
 
 # --- intents ---------------------------------------------------------------------
 
-PAYSLIP, COMPARE, STRUCTURE, LEAVE, WFH, OVERTIME, ATTENDANCE, SHIFT, DOCUMENTS, HOLIDAYS = (
-    'payslip', 'compare', 'structure', 'leave', 'wfh', 'overtime', 'attendance', 'shift', 'documents', 'holidays')
+PAYSLIP, COMPARE, STRUCTURE, LEAVE, WFH, OVERTIME, ATTENDANCE, SHIFT, DOCUMENTS, HOLIDAYS, CORRECTION, ONBOARDING = (
+    'payslip', 'compare', 'structure', 'leave', 'wfh', 'overtime', 'attendance', 'shift', 'documents', 'holidays',
+    'correction', 'onboarding')
 
 # "How do I apply…" is a general question; "my…", "was I…", "do I have…" are about the user's own records.
 PERSONAL = re.compile(r"\b(my|me|mine|i'm|i've|am i|was i|were i|did i|have i|do i have|i have|i got|i get|i was|i am)\b")
@@ -48,8 +49,11 @@ PATTERNS = {
     OVERTIME: re.compile(r'overtime|\bot\b|extra hours'),
     ATTENDANCE: re.compile(r'attendance|\blate\b|late minutes|check[- ]?in|check[- ]?out|\babsent|present|punctual|hours worked'),
     SHIFT: re.compile(r'\bshift'),
-    DOCUMENTS: re.compile(r'document|certificate|id proof|address proof|resume'),
+    DOCUMENTS: re.compile(r'document|certificate|id proof|address proof|resume|expir|passport|visa|licen[cs]e'),
     HOLIDAYS: re.compile(r'holiday'),
+    CORRECTION: re.compile(r'correction|correct (my )?attendance|fix (my )?attendance|missed (my )?(check|punch)|forgot to (check|punch)'
+                           r'|wrong (check|time)'),
+    ONBOARDING: re.compile(r'onboarding|checklist|joining formalit|new joiner|what (do i|should i) (need to )?(submit|provide|upload)'),
 }
 STATUS_WORDS = re.compile(r'status|approved|rejected|pending|cancel|my request|requests|applied|submitted|history|did .* get')
 OTHER_PERSON = re.compile(
@@ -369,7 +373,11 @@ def leave_retrieval(result, person, want_status):
     start, end = leave_year_bounds(year, rules)
     label = leave_year_label(year, rules)
     balance = leave_balance_for(person, year)
-    lines = [f'LEAVE BALANCE for leave year {label} (configured by administrators; "remaining" = what can still be requested '
+    lines = [f'LEAVE RULES (set by administrators): leave year {label} runs {start:%d %b %Y} to {end:%d %b %Y}; '
+             f'apply at least {rules.min_notice_days} day(s) ahead; '
+             f'{f"at most {rules.max_days_per_request} day(s) per request" if rules.max_days_per_request else "no per-request limit"}; '
+             f'leave for past dates {"can" if rules.allow_past_dates else "cannot"} be requested.',
+             f'LEAVE BALANCE for leave year {label} (configured by administrators; "remaining" = what can still be requested '
              'after pending requests):']
     lines += [_balance_line(name, b) for name, b in balance.items()] or ['- No leave types are configured.']
     requests = list(LeaveRequest.objects.filter(employee=person).filter(Q(start_date__range=(start, end)) | Q(status='PENDING'))
@@ -446,13 +454,59 @@ def shift_retrieval(result, person):
     result.fallback.append(f'**Shift:** {text.split(": ", 1)[1]}')
 
 
+def _expiry_text(document, today):
+    if document.expiry_date is None:
+        return 'no expiry date'
+    days = (document.expiry_date - today).days
+    if days < 0:
+        return f'EXPIRED on {document.expiry_date:%d %b %Y}'
+    return f'expires {document.expiry_date:%d %b %Y} (in {days} day(s))'
+
+
 def document_retrieval(result, person):
+    today = timezone.localdate()
     docs = list(EmployeeDocument.objects.filter(employee=person).order_by('-uploaded_at')[:10])
-    lines = ['DOCUMENTS (latest 10):'] + ([f'- {d.title} ({d.get_document_type_display()}), {d.get_status_display()}'
-                                          + (f', note: {d.review_note}' if d.review_note else '') for d in docs] or ['- No documents uploaded.'])
+    lines = ['DOCUMENTS (latest 10; review status and expiry are separate):'] + (
+        [f'- {d.title} ({d.get_document_type_display()}), review status {d.get_status_display()}, {_expiry_text(d, today)}'
+         + (f', note: {d.review_note}' if d.review_note else '') for d in docs] or ['- No documents uploaded.'])
     result.blocks.append('\n'.join(lines))
     result.sources.append('Documents')
     result.fallback.append('**Your documents**\n' + '\n'.join(lines[1:]))
+
+
+def correction_retrieval(result, person):
+    items = list(AttendanceCorrectionRequest.objects.filter(employee=person).order_by('-created_at')[:10])
+
+    def clock(value):
+        return timezone.localtime(value).strftime('%H:%M') if value else '—'
+
+    lines = ['ATTENDANCE CORRECTION REQUESTS (latest 10):'] + ([
+        f'- {c.date:%d %b %Y}: {c.get_correction_type_display()}, requested check-in {clock(c.requested_check_in)}, '
+        f'check-out {clock(c.requested_check_out)}, status {c.get_status_display()}'
+        + (f', administrator note: {c.review_note}' if c.review_note else '') for c in items] or ['- No correction requests.'])
+    result.blocks.append('\n'.join(lines))
+    result.sources.append('Attendance correction requests')
+    result.fallback.append('**Your attendance correction requests**\n' + '\n'.join(lines[1:]))
+
+
+def onboarding_retrieval(result, person):
+    from accounts.onboarding import summary
+
+    employee = Employee.objects.select_related('user', 'onboarding_completed_by').filter(user=person).first()
+    if employee is None:
+        text = 'ONBOARDING: this user has no employee record yet.'
+        result.blocks.append(text)
+        result.fallback.append('You do not have an employee record yet, so there is no onboarding checklist.')
+        result.sources.append('Onboarding checklist')
+        return
+    data = summary(employee)
+    state = {'COMPLETED': 'completed', 'READY': 'all items provided, waiting for an administrator to review',
+             'IN_PROGRESS': 'in progress'}[data['state']]
+    lines = [f'ONBOARDING CHECKLIST: {state}; {data["done"]} of {data["total"]} items done.'] + [
+        f'- {item["label"]}: {item["state"]}' + (f' — {item["hint"]}' if item['hint'] else '') for item in data['items']]
+    result.blocks.append('\n'.join(lines))
+    result.sources.append('Onboarding checklist')
+    result.fallback.append(f'**Your onboarding:** {state} ({data["done"]} of {data["total"]} done)\n' + '\n'.join(lines[1:]))
 
 
 def holiday_retrieval(result):
@@ -519,6 +573,10 @@ def retrieve(conversation, question):
             shift_retrieval(result, person)
         if DOCUMENTS in intents:
             document_retrieval(result, person)
+        if CORRECTION in intents:
+            correction_retrieval(result, person)
+        if ONBOARDING in intents:
+            onboarding_retrieval(result, person)
     if HOLIDAYS in intents:
         holiday_retrieval(result)
     return result

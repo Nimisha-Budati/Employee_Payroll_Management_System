@@ -16,7 +16,8 @@
     <div class="page-actions" id="actions"></div>
   </div>
   <section class="card">
-    <div class="toolbar"><select class="select" id="statusFilter" aria-label="Filter by status"><option value="">All statuses</option><option value="PENDING">Pending review</option><option value="VERIFIED">Verified</option><option value="REJECTED">Rejected</option></select></div>
+    <div class="toolbar"><select class="select" id="statusFilter" aria-label="Filter by status"><option value="">All statuses</option><option value="PENDING">Pending review</option><option value="VERIFIED">Verified</option><option value="REJECTED">Rejected</option></select><select class="select" id="expiryFilter" aria-label="Filter by expiry"></select></div>
+    <div class="alert alert-warning" id="expirySummary" role="status" hidden style="margin:0 16px 12px"></div>
     <div class="table-wrap"><table class="table"><thead id="head"></thead><tbody id="rows"></tbody></table></div>
   </section>
 </main>

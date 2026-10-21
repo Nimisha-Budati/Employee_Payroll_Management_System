@@ -13,7 +13,7 @@
 <main id="content">
   <div class="page-header">
     <div><h1>Attendance &amp; shift</h1><p>Check in and out from the office. Your location is only used to confirm you are on site.</p></div>
-    <div class="page-actions" id="actions"><a class="btn" href="ai-assistant.html?tab=ATTENDANCE" id="insightLink"></a></div>
+    <div class="page-actions" id="actions"><button class="btn" type="button" id="correctBtn"></button><a class="btn" href="ai-assistant.html?tab=ATTENDANCE" id="insightLink"></a></div>
   </div>
   <div class="grid grid-main">
     <section class="card"><div class="card-header"><div><h2>Today</h2><p id="todayDate"></p></div><div id="todayBadge"></div></div><div class="card-body" id="today"></div></section>
@@ -22,7 +22,11 @@
   <section class="grid grid-4" id="monthStats" style="margin-top:20px" aria-label="This month"></section>
   <section class="card" style="margin-top:20px">
     <div class="card-header"><div><h2>Recent attendance</h2><p>Your last 30 records</p></div></div>
-    <div class="table-wrap"><table class="table"><thead><tr><th>Date</th><th>Shift</th><th>Check in</th><th class="right">Late</th><th>Check out</th><th class="right">Hours worked</th><th>Status</th></tr></thead><tbody id="rows"></tbody></table></div>
+    <div class="table-wrap"><table class="table"><thead><tr><th>Date</th><th>Shift</th><th>Check in</th><th class="right">Late</th><th>Check out</th><th class="right">Hours worked</th><th>Status</th><th class="right"><span class="sr-only">Actions</span></th></tr></thead><tbody id="rows"></tbody></table></div>
+  </section>
+  <section class="card" style="margin-top:20px">
+    <div class="card-header"><div><h2>Correction requests</h2><p>Requests to fix a missed or wrong check-in or check-out, and the administrator's response</p></div></div>
+    <div class="table-wrap"><table class="table"><thead><tr><th>Date</th><th>Request</th><th>Recorded → requested</th><th>Status</th><th>Response</th><th class="right"><span class="sr-only">Actions</span></th></tr></thead><tbody id="correctionRows"></tbody></table></div>
   </section>
   <section class="card" style="margin-top:20px">
     <div class="card-header"><div><h2>Shift history</h2><p>Shifts assigned to you by an administrator</p></div></div>

@@ -416,7 +416,46 @@ def overtime_report(params, wb):
     return count, filters
 
 
+def analytics_workbook(params, wb):
+    from .analytics import AnalyticsError, build_analytics
+
+    try:
+        data = build_analytics(params)
+    except AnalyticsError as error:
+        raise ReportError(str(error))
+    filters = _describe([('Months', f'{data["from"]} to {data["to"]}'), ('Department', data['department'] or 'All')])
+    monthly = [(
+        row['label'], row['payslips'], row['payroll']['gross'], row['payroll']['net'], row['payroll']['deductions'],
+        row['overtime']['hours'], row['overtime']['amount'], row['attendance']['present'], row['attendance']['late'],
+        row['attendance']['late_minutes'], row['leave_days'], row['absenteeism']['lop_days'],
+        row['absenteeism']['rate'] if row['absenteeism']['rate'] is not None else '',
+        row['headcount']['end'], row['headcount']['joined'], row['headcount']['left'],
+    ) for row in data['monthly']]
+    count = add_sheet(wb, 'Monthly trends', 'Analytics – monthly trends', filters, [
+        ('Month', 12, 'text'), ('Payslips', 10, 'int'), ('Payroll cost (gross)', 18, 'money'), ('Net pay', 16, 'money'),
+        ('Deductions', 16, 'money'), ('Overtime hours', 12, 'number'), ('Overtime cost', 15, 'money'),
+        ('Check-ins', 11, 'int'), ('Late check-ins', 12, 'int'), ('Late minutes', 12, 'int'), ('Leave days', 11, 'int'),
+        ('LOP days', 10, 'number'), ('Absenteeism %', 13, 'number'), ('Headcount (month end)', 14, 'int'),
+        ('Joined', 9, 'int'), ('Left', 9, 'int'),
+    ], monthly, totals={2: 'sum', 3: 'sum', 4: 'sum', 5: 'sum', 6: 'sum', 7: 'sum', 8: 'sum', 9: 'sum', 10: 'sum',
+                        11: 'sum', 12: 'sum', 15: 'sum', 16: 'sum'})
+    add_sheet(wb, 'Departments', 'Analytics – departments', filters, [
+        ('Department', 22, 'text'), ('Active headcount', 14, 'int'), ('Payslips', 10, 'int'), ('Payroll cost (gross)', 18, 'money'),
+        ('Net pay', 16, 'money'), ('Overtime cost', 15, 'money'), ('Late check-ins', 12, 'int'), ('Leave days', 11, 'int'),
+    ], [(row['department'], row['headcount'], row['payslips'], row['gross'], row['net'], row['overtime_amount'], row['late'],
+         row['leave_days']) for row in data['departments']], totals={2: 'sum', 3: 'sum', 4: 'sum', 5: 'sum', 6: 'sum', 7: 'sum', 8: 'sum'})
+    utilisation = data['leave_utilisation']
+    add_sheet(wb, 'Leave utilisation', f'Leave utilisation – {utilisation["label"]}', filters, [
+        ('Leave type', 20, 'text'), ('Paid', 8, 'text'), ('Entitled days', 13, 'int'), ('Used days', 11, 'int'),
+        ('Pending days', 12, 'int'), ('Utilisation %', 13, 'number'),
+    ], [(row['leave_type'], 'Yes' if row['is_paid'] else 'No', row['entitled_days'] if row['entitled_days'] is not None else 'No limit',
+         row['used_days'], row['pending_days'], row['utilisation'] if row['utilisation'] is not None else '')
+        for row in utilisation['types']])
+    return count, filters
+
+
 REPORTS = {
+    'analytics': ('Analytics', analytics_workbook),
     'employees': ('Employee', employee_report),
     'attendance': ('Attendance', attendance_report),
     'leave': ('Leave', leave_report),

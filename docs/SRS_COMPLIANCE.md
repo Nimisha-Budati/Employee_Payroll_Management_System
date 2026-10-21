@@ -136,3 +136,51 @@ Not tested here: real GPS check-in in a browser (covered by API tests with coord
 | Late minutes for past records | Attendance recorded before this change has no shift snapshot, so it shows "—" |
 | Non-functional requirements (SRS 4) | Not load-tested; the SRS text supplied was cut off in section 4.1 |
 | Lockout and AI rate limits | Use Django's default per-process cache; configure a shared cache (e.g. Redis) for multi-process deployments |
+
+---
+
+## 7. Enhancement phase, 21 October 2026
+
+### 7.1 SRS items re-verified against code and tests
+
+| SRS item | Status | Evidence |
+| --- | --- | --- |
+| Shift creation, editing, employee assignment | ✅ | `workforce/views.py`; `workforce.tests.ShiftManagementTests` |
+| Overtime recording, approval, payroll integration | ✅ | `workforce/views.py`, `payroll/calculator.py` (approved only); `workforce.tests.OvertimeTests` |
+| Late minutes and attendance insights | ✅ | `workforce/services.late_minutes`, `assistant/context.py`; `LateMinuteTests`, assistant tests; late minutes are now also recalculated when a correction changes a check-in (`AttendanceCorrectionTests`) |
+| DA and bonus | ✅ | `payroll/calculator.py`; `SalaryComponentTests` |
+| Excel (.xlsx) exports | ✅ | `payroll/excel.py` (employees, attendance, leave, overtime, payroll, analytics); `payroll/test_excel.py`, `payroll.test_variance.AnalyticsTests` (formula text stays text) |
+| AI chatbot, leave policy, salary breakdown, attendance insights | ✅* | `assistant/`; 41 assistant tests with the Gemini HTTP call stubbed (no live key here) |
+
+All 164 tests that existed before this phase still pass. Seven existing tests were changed only to record a variance review before finalising, which is now required.
+
+### 7.2 New in this phase
+
+| Area | Status | Tests |
+| --- | --- | --- |
+| Payroll variance analysis and required review before finalising | ✅ | `payroll.test_variance.VarianceTests` (5) |
+| Attendance correction requests (employee request, admin decision, audit) | ✅ | `accounts.test_enhancements.AttendanceCorrectionTests` (6) |
+| Team calendar with role-based privacy | ✅ | `TeamCalendarTests` (3) |
+| Advanced analytics and analytics Excel export | ✅ | `AnalyticsTests` (2) |
+| Onboarding checklist, review and completion | ✅ | `OnboardingTests` (3) |
+| Document expiry dates, filters and reminders | ✅ | `DocumentExpiryAndReminderTests` (4) |
+| Notification preferences (security always on), unread filter | ✅ | `NotificationPreferenceTests` (2) |
+| Audit filters by employee/action/module/date; append-only entries | ✅ | `AuditImprovementTests` (2) |
+| AI: corrections, onboarding, document expiry, configured leave rules, evidence | ✅* | `AssistantNewTopicTests` (1) |
+
+**Migrations** (additive, data kept): `accounts/0022_corrections_onboarding_reminders` (new tables `AttendanceCorrectionRequest`, `NotificationPreference`, `OnboardingSettings`, `ReminderSettings`, `ReminderLog`; new nullable/defaulted columns on employee, document, attendance, audit log and notification; indexes and constraints); `accounts/0023_backfill_onboarding_deactivation_audit_subject` (existing employees marked onboarded, deactivation dates and audit subjects filled from existing audit entries; nothing overwritten or deleted); `payroll/0004_payroll_review`.
+
+**Verification performed**
+- Full suite: **192 tests, all passing**, run on SQLite because the PostgreSQL password in `backend/.env` currently does not match the server.
+- Migrations applied cleanly to a fresh SQLite database; not yet applied to PostgreSQL (`employee_payroll`).
+- Browser check on a seeded SQLite QA database: admin dashboard alerts, variance review (flags, reasons, refusal without confirmation, review then finalise), correction approval and its audit entry, analytics, team calendar, onboarding; employee dashboard checklist, correction request with validation error, team availability privacy, notification settings, documents with expiry; desktop and 375 px phone width, light and dark themes.
+
+### 7.3 Not done or not verified
+
+| Item | Notes |
+| --- | --- |
+| PostgreSQL run | Tests and migrations must be re-run on PostgreSQL once the `.env` password matches |
+| Live Gemini call | Still only verified with stubbed responses |
+| Email delivery of reminders | Reminders are in-app notifications; no email or SMS channel was added |
+| Scheduled reminders | Run on dashboard load (at most every 6 hours) or via `manage.py send_reminders`; an OS scheduler entry is not created automatically |
+| `settings.html` | Read-only in this checkout, so the new settings cards are inserted by `js/settings.js` |

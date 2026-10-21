@@ -97,6 +97,31 @@ Keywords: overtime claim extra hours ot approval rate paid
 Keywords: document upload id proof certificate resume verify file
 - Open **My work → Documents**, click **Upload document**, enter a title, choose the type (Identity proof, Address proof, Education certificate, Resume or Other) and a PDF, JPG or PNG file up to 5 MB.
 - Documents are **Pending review** until an administrator verifies or rejects them (with a reason). You can delete a document only while it is pending. Files are private to you and administrators.
+- Documents such as a passport, visa or licence can have an **Expiry date** (enter it when uploading; an administrator can also set or change it). Expiry is shown separately from the review status: **Valid**, **Expiring soon** or **Expired**.
+- PayrollPro reminds you and the administrators before a document expires (by default 30, 7 and 1 days before, set by administrators) and once it has expired. Upload a renewed copy when reminded.
+
+## Attendance corrections
+Keywords: attendance correction missed check in forgot check out wrong time fix attendance punch request
+- You cannot edit attendance yourself. If you forgot to check in or out, or a time is wrong, open **My work → Attendance & shift** and click **Request correction**.
+- Choose the date, the type (**Missed check-in**, **Missed check-out**, **Incorrect check-in or check-out time**, or **Worked but no attendance recorded**), the correct time(s) and a reason. Tick **next day** for a check-out after midnight.
+- Rules: the date must be today or earlier, within the last 60 days (unless an administrator changed this), on or after your joining date, and in a month whose payroll is not finalised. Times cannot be in the future and check-out must be after check-in. Only one pending request per day.
+- The request is **Pending** until an administrator approves or rejects it (a rejection includes a reason). You can cancel it while it is pending. Your attendance changes only when it is approved; corrected days are marked **Corrected**, and late minutes are recalculated from your shift.
+
+## Team calendar
+Keywords: team calendar who is on leave availability schedule month view colleagues
+- Open **Company → Team calendar**. **My schedule** shows your approved leave, approved work from home, your shift and holidays. **Team availability** shows who in your department is on leave or working from home (without leave types or reasons).
+- Use the arrows to move between months. Administrators can filter by employee, department, date range and event type.
+
+## Onboarding checklist
+Keywords: onboarding checklist new joiner joining documents profile complete submit provide
+- New employees see an **Onboarding checklist** on their dashboard. It lists what is still needed: name, email, phone, address (and photo, if required) in **My profile**, the required documents (by default identity proof and address proof) in **Documents**, and items an administrator completes (department, designation and salary structure).
+- A document counts once an administrator has verified it and it has not expired.
+- When everything is provided, administrators are notified and review it. Onboarding is complete only after an administrator marks it complete; you are notified.
+
+## Notification settings
+Keywords: notification preferences mute turn off reminders unread bell settings
+- Open **Settings → Notifications** to switch optional notification types on or off (for example announcements, chat, attendance or reminders). Security alerts (password and Google sign-in changes), payslip and employee-record messages, onboarding and messages an administrator sends you are always delivered.
+- The bell shows your unread count. On **Notifications** you can filter to unread items and mark one or all as read.
 
 ## Holidays, announcements, notifications and messages
 Keywords: holiday calendar announcement notification bell message chat admin
@@ -113,5 +138,5 @@ Keywords: password reset forgot change otp code profile photo google sign in log
 
 ## Who to contact
 Keywords: contact hr admin help support problem wrong error dispute
-- For corrections to your payslip, salary structure, attendance or requests, contact an administrator (HR/payroll). You can message them through **Company → Messages** once they start a conversation with you.
+- For attendance mistakes use **Request correction** on **Attendance & shift**. For corrections to your payslip, salary structure or other requests, contact an administrator (HR/payroll). You can message them through **Company → Messages** once they start a conversation with you.
 - The assistant cannot change any records.

@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f4f8f6">
+  <script src="js/theme.js"></script>
+  <title>Team calendar · PayrollPro</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+<main id="content">
+  <div class="page-header">
+    <div><h1>Team calendar</h1><p id="intro">Approved leave, approved work from home, shifts and holidays.</p></div>
+  </div>
+  <section class="card">
+    <div class="tabs" role="tablist" id="scopeTabs" hidden>
+      <button class="tab" type="button" role="tab" data-scope="mine" aria-selected="true">My schedule</button>
+      <button class="tab" type="button" role="tab" data-scope="team" aria-selected="false">Team availability</button>
+    </div>
+    <div class="toolbar tc-toolbar">
+      <div class="tc-nav">
+        <button class="icon-btn" type="button" id="prev" aria-label="Previous month"></button>
+        <h2 class="tc-title" id="title" aria-live="polite"></h2>
+        <button class="icon-btn" type="button" id="next" aria-label="Next month"></button>
+        <button class="btn btn-sm" type="button" id="today">Today</button>
+      </div>
+      <div class="tc-filters" id="adminFilters" hidden>
+        <select class="select" id="department" aria-label="Department"><option value="">All departments</option></select>
+        <select class="select" id="employee" aria-label="Employee"><option value="">All employees</option></select>
+        <label class="sr-only" for="from">From</label><input class="input" type="date" id="from" aria-label="Range from" style="width:auto">
+        <label class="sr-only" for="to">To</label><input class="input" type="date" id="to" aria-label="Range to" style="width:auto">
+        <button class="btn btn-sm" type="button" id="clearRange" hidden>Back to month</button>
+      </div>
+    </div>
+    <fieldset class="tc-types" id="types">
+      <legend class="sr-only">Event types</legend>
+    </fieldset>
+    <div class="card-body">
+      <div class="alert alert-info" id="note" hidden></div>
+      <div id="grid" class="tc-grid-wrap"></div>
+      <h3 class="tc-agenda-title" id="agendaTitle">Events</h3>
+      <div id="agenda"></div>
+    </div>
+  </section>
+</main>
+<script src="js/app.js"></script>
+<script src="js/calendar.js"></script>
+</body>
+</html>

@@ -15,7 +15,14 @@
     <div><h1>Notifications</h1><p>Updates about requests, payroll and announcements.</p></div>
     <div class="page-actions" id="actions"><button class="btn" id="markAll" type="button"></button><button class="btn btn-primary" id="sendBtn" type="button" hidden></button></div>
   </div>
-  <section class="card"><div id="list"></div></section>
+  <section class="card">
+    <div class="tabs" role="tablist">
+      <button class="tab" type="button" role="tab" data-read="all" aria-selected="true">All</button>
+      <button class="tab" type="button" role="tab" data-read="unread" aria-selected="false" id="unreadTab">Unread</button>
+    </div>
+    <div class="toolbar"><select class="select" id="kind" aria-label="Notification type"></select><a class="btn btn-sm" href="settings.html#notifications">Notification settings</a></div>
+    <div id="list"></div>
+  </section>
   <section class="card" id="sentCard" style="margin-top:20px" hidden>
     <div class="card-header"><div><h2>Sent notifications</h2><p>Notifications you sent to employees, with delivery, read count and expiry.</p></div></div>
     <div class="table-wrap"><table class="table"><thead><tr><th>Notification</th><th>Sent to</th><th class="right">Delivered</th><th class="right">Read</th><th>Expires</th><th>Sent</th><th class="right">Actions</th></tr></thead><tbody id="sentRows"></tbody></table></div>

@@ -291,7 +291,10 @@ def reset_password(request):
         reset.user.save(update_fields=['password'])
         reset.delete()
         record_audit(request, 'PASSWORD_RESET', 'Account', reset.user.pk,
-                     f'{reset.user.username} reset their password with an emailed code.', actor=reset.user)
+                     f'{reset.user.username} reset their password with an emailed code.', actor=reset.user, subject=reset.user)
+    notify_user(reset.user, 'SECURITY', 'Password reset',
+                'Your password was reset with an emailed code. If this was not you, contact an administrator immediately.',
+                'settings.html')
     return JsonResponse({'message': 'Password reset successfully'})
 
 
@@ -309,5 +312,8 @@ def change_password(request):
     request.user.set_password(new_password)
     request.user.save(update_fields=['password'])
     update_session_auth_hash(request, request.user)
-    record_audit(request, 'PASSWORD_CHANGE', 'Account', request.user.pk, f'{request.user.username} changed their password.')
+    record_audit(request, 'PASSWORD_CHANGE', 'Account', request.user.pk, f'{request.user.username} changed their password.',
+                 subject=request.user)
+    notify_user(request.user, 'SECURITY', 'Password changed',
+                'Your password was changed. If this was not you, reset it and contact an administrator.', 'settings.html')
     return Response({'message': 'Password changed successfully'})

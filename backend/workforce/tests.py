@@ -207,6 +207,7 @@ class OvertimeTests(WorkforceTestCase):
         self.assertEqual(slip.overtime_pay, Decimal('1375.00'))
 
         # After finalising, overtime in that month is locked.
+        admin.post('/api/payroll/variance/review/', {'year': 2025, 'month': 6, 'acknowledge_flags': True}, format='json')
         admin.post('/api/payroll/finalize/', {'year': 2025, 'month': 6}, format='json')
         locked = admin.post('/api/overtime/', {'employee_id': self.asha.user_id, 'date': '2025-06-20', 'hours': '1', 'reason': 'late entry', 'approve': True}, format='json')
         self.assertEqual(locked.status_code, 409)

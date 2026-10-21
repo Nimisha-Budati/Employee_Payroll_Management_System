@@ -28,9 +28,37 @@ class Employee(models.Model):
     joining_date = models.DateField()
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='ACTIVE')
     user = models.OneToOneField(User, on_delete=models.CASCADE)
+    # Date the employee was last deactivated (cleared on reactivation); used for headcount trends.
+    deactivated_at = models.DateField(null=True, blank=True)
+
+    # Onboarding: the checklist itself is computed from the profile and documents (accounts/onboarding.py);
+    # only the administrator's decision and the "ready" notification time are stored.
+    ONBOARDING_PENDING = 'PENDING'
+    ONBOARDING_COMPLETED = 'COMPLETED'
+    ONBOARDING_CHOICES = [(ONBOARDING_PENDING, 'In progress'), (ONBOARDING_COMPLETED, 'Completed')]
+    onboarding_status = models.CharField(max_length=12, choices=ONBOARDING_CHOICES, default=ONBOARDING_PENDING, db_index=True)
+    onboarding_ready_at = models.DateTimeField(null=True, blank=True)
+    onboarding_completed_at = models.DateTimeField(null=True, blank=True)
+    onboarding_completed_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    onboarding_note = models.CharField(max_length=255, blank=True)
 
     def __str__(self):
         return f'{self.employee_id} - {self.user.username}'
+
+
+class OnboardingSettings(models.Model):
+    """Singleton (pk=1): what every new employee must provide before onboarding can be completed."""
+
+    required_document_types = models.JSONField(default=list, blank=True)   # EmployeeDocument.DOCUMENT_TYPES codes
+    require_address = models.BooleanField(default=True)
+    require_profile_photo = models.BooleanField(default=False)
+    require_salary_structure = models.BooleanField(default=True)
+    updated_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    updated_at = models.DateTimeField(auto_now=True)
+
+    @classmethod
+    def load(cls):
+        return cls.objects.get_or_create(pk=1, defaults={'required_document_types': ['IDENTITY', 'ADDRESS']})[0]
 
 
 class PasswordResetOTP(models.Model):
@@ -163,11 +191,24 @@ class EmployeeDocument(models.Model):
     file = models.FileField(upload_to='employee_documents/%Y/%m/')
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDING')
     review_note = models.TextField(blank=True)
+    # Optional validity end (passport, visa, licence...). Expiry is independent of the review status.
+    expiry_date = models.DateField(null=True, blank=True, db_index=True)
     uploaded_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
         return f"{self.employee.username} - {self.title} ({self.status})"
+
+    def expiry_state(self, today=None, warn_days=None):
+        """NONE, VALID, EXPIRING (within warn_days) or EXPIRED."""
+        if self.expiry_date is None:
+            return 'NONE'
+        today = today or timezone.localdate()
+        if warn_days is None:
+            warn_days = ReminderSettings.load().warning_window_days
+        if self.expiry_date < today:
+            return 'EXPIRED'
+        return 'EXPIRING' if (self.expiry_date - today).days <= warn_days else 'VALID'
 
 
 class Holiday(models.Model):
@@ -239,16 +280,23 @@ class Notification(models.Model):
         ('ANNOUNCEMENT', 'Announcement'),
         ('ATTENDANCE', 'Attendance'),
         ('CHAT', 'Chat'),
+        ('CORRECTION', 'Attendance correction'),
         ('DOCUMENT', 'Document'),
         ('EMPLOYEE', 'Employee'),
         ('GENERAL', 'General'),
         ('HOLIDAY', 'Holiday'),
         ('LEAVE', 'Leave'),
+        ('ONBOARDING', 'Onboarding'),
         ('OVERTIME', 'Overtime'),
         ('PAYROLL', 'Payroll'),
+        ('REMINDER', 'Reminder'),
+        ('SECURITY', 'Security'),
         ('SHIFT', 'Shift'),
         ('WFH', 'Work from home'),
     ]
+    # Kinds a user can never switch off: account security, payslips/employee record, onboarding
+    # and messages an administrator sent on purpose.
+    MANDATORY_KINDS = ('SECURITY', 'EMPLOYEE', 'PAYROLL', 'ONBOARDING', 'GENERAL')
 
     recipient = models.ForeignKey(User, on_delete=models.CASCADE, related_name='notifications')
     actor = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='sent_notifications')
@@ -266,6 +314,54 @@ class Notification(models.Model):
 
     class Meta:
         ordering = ['-created_at', '-id']
+        indexes = [models.Index(fields=['recipient', 'read_at'])]
+
+
+class NotificationPreference(models.Model):
+    """A user's choice to stop receiving one optional kind of in-app notification."""
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='notification_preferences')
+    kind = models.CharField(max_length=20, choices=Notification.KIND_CHOICES)
+    enabled = models.BooleanField(default=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['user', 'kind'], name='one_preference_per_user_kind')]
+
+
+class ReminderSettings(models.Model):
+    """Singleton (pk=1) for automatic reminders (document expiry, pending approvals, onboarding)."""
+
+    enabled = models.BooleanField(default=True)
+    # Days before a document's expiry date on which the employee and administrators are reminded.
+    document_reminder_days = models.JSONField(default=list, blank=True)
+    # Administrators get a digest of requests that have waited at least this many days.
+    pending_after_days = models.PositiveSmallIntegerField(default=2)
+    last_run_at = models.DateTimeField(null=True, blank=True)
+    updated_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    updated_at = models.DateTimeField(auto_now=True)
+
+    DEFAULT_DOCUMENT_DAYS = [30, 7, 1]
+
+    @classmethod
+    def load(cls):
+        return cls.objects.get_or_create(pk=1, defaults={'document_reminder_days': list(cls.DEFAULT_DOCUMENT_DAYS)})[0]
+
+    @property
+    def reminder_days(self):
+        days = sorted({int(day) for day in (self.document_reminder_days or []) if str(day).isdigit()}, reverse=True)
+        return days or list(self.DEFAULT_DOCUMENT_DAYS)
+
+    @property
+    def warning_window_days(self):
+        return max(self.reminder_days)
+
+
+class ReminderLog(models.Model):
+    """One row per reminder sent, so a reminder is never sent twice."""
+
+    key = models.CharField(max_length=120, unique=True)
+    created_at = models.DateTimeField(auto_now_add=True)
 
 
 class NotificationBroadcast(models.Model):
@@ -326,6 +422,9 @@ class AttendanceRecord(models.Model):
     scheduled_start = models.DateTimeField(null=True, blank=True)
     late_minutes = models.PositiveIntegerField(null=True, blank=True)
 
+    # True once an administrator approved a correction request for this day.
+    is_corrected = models.BooleanField(default=False)
+
     class Meta:
         ordering = ['-date', '-check_in_at']
         constraints = [
@@ -334,6 +433,56 @@ class AttendanceRecord(models.Model):
 
     def __str__(self):
         return f'{self.employee.username} - {self.date}'
+
+
+class AttendanceCorrectionRequest(models.Model):
+    """An employee's request to fix one day's attendance. Attendance changes only when an administrator approves."""
+
+    MISSED_CHECK_IN = 'MISSED_CHECK_IN'
+    MISSED_CHECK_OUT = 'MISSED_CHECK_OUT'
+    WRONG_TIMES = 'WRONG_TIMES'
+    MISSED_DAY = 'MISSED_DAY'
+    TYPE_CHOICES = [
+        (MISSED_CHECK_IN, 'Missed check-in'),
+        (MISSED_CHECK_OUT, 'Missed check-out'),
+        (WRONG_TIMES, 'Incorrect check-in or check-out time'),
+        (MISSED_DAY, 'Worked but no attendance recorded'),
+    ]
+    PENDING, APPROVED, REJECTED, CANCELLED = 'PENDING', 'APPROVED', 'REJECTED', 'CANCELLED'
+    STATUS_CHOICES = [(PENDING, 'Pending'), (APPROVED, 'Approved'), (REJECTED, 'Rejected'), (CANCELLED, 'Cancelled')]
+
+    employee = models.ForeignKey(User, on_delete=models.CASCADE, related_name='attendance_corrections')
+    date = models.DateField()
+    correction_type = models.CharField(max_length=20, choices=TYPE_CHOICES)
+    requested_check_in = models.DateTimeField(null=True, blank=True)
+    requested_check_out = models.DateTimeField(null=True, blank=True)
+    reason = models.TextField(max_length=1000)
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default=PENDING)
+    # The attendance values when the request was made (refreshed when it is decided).
+    original_check_in = models.DateTimeField(null=True, blank=True)
+    original_check_out = models.DateTimeField(null=True, blank=True)
+    attendance = models.ForeignKey(AttendanceRecord, on_delete=models.SET_NULL, null=True, blank=True, related_name='corrections')
+    review_note = models.TextField(blank=True)
+    reviewed_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at', '-id']
+        constraints = [
+            models.UniqueConstraint(fields=['employee', 'date'], condition=models.Q(status='PENDING'),
+                                    name='one_pending_correction_per_employee_day'),
+            models.CheckConstraint(
+                condition=models.Q(requested_check_in__isnull=True) | models.Q(requested_check_out__isnull=True)
+                | models.Q(requested_check_out__gt=models.F('requested_check_in')),
+                name='correction_check_out_after_check_in',
+            ),
+        ]
+        indexes = [models.Index(fields=['status', 'created_at']), models.Index(fields=['employee', 'date'])]
+
+    def __str__(self):
+        return f'{self.employee.username} correction for {self.date} ({self.status})'
 
 
 class WorkFromHomeRequest(models.Model):
@@ -363,16 +512,28 @@ class AuditLog(models.Model):
     action = models.CharField(max_length=40)
     entity_type = models.CharField(max_length=40)
     entity_id = models.CharField(max_length=40, blank=True)
+    # The employee the action was about (for filtering by employee), when there is one.
+    subject = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='audit_subject_logs')
+    subject_name = models.CharField(max_length=150, blank=True)
     summary = models.CharField(max_length=300)
     ip_address = models.GenericIPAddressField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         ordering = ['-created_at', '-id']
-        indexes = [models.Index(fields=['entity_type', 'created_at'])]
+        indexes = [models.Index(fields=['entity_type', 'created_at']), models.Index(fields=['created_at']),
+                   models.Index(fields=['action'])]
 
     def __str__(self):
         return f'{self.created_at:%Y-%m-%d %H:%M} {self.actor_name} {self.action} {self.entity_type}'
+
+    def save(self, *args, **kwargs):
+        if self.pk is not None and not kwargs.pop('force_audit_write', False):
+            raise PermissionError('Audit log entries are append-only and cannot be changed.')
+        super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        raise PermissionError('Audit log entries are append-only and cannot be deleted.')
 
 
 class GoogleIdentity(models.Model):

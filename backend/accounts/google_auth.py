@@ -270,7 +270,10 @@ def _handle_link(request, pending, sub, email, fail):
     if GoogleIdentity.objects.filter(google_sub=sub).exists():
         return fail('google_in_use')
     GoogleIdentity.objects.create(user=user, google_sub=sub, email=email)
-    record_audit(request, 'GOOGLE_LINK', 'Account', user.pk, f'{user.username} connected Google account {email}.')
+    record_audit(request, 'GOOGLE_LINK', 'Account', user.pk, f'{user.username} connected Google account {email}.', subject=user)
+    from .notifications import notify_user
+    notify_user(user, 'SECURITY', 'Google account connected',
+                f'Google account {email} can now sign in to PayrollPro. If this was not you, disconnect it in Settings.', 'settings.html')
     return _frontend('settings.html', google='linked')
 
 
@@ -323,5 +326,9 @@ def google_link(request):
     if not request.user.has_usable_password():
         return Response({'detail': 'Set a password first (use "Forgot password" on the sign-in page), otherwise you would be locked out.'}, status=400)
     identity.delete()
-    record_audit(request, 'GOOGLE_UNLINK', 'Account', request.user.pk, f'{request.user.username} disconnected their Google account.')
+    record_audit(request, 'GOOGLE_UNLINK', 'Account', request.user.pk, f'{request.user.username} disconnected their Google account.',
+                 subject=request.user)
+    from .notifications import notify_user
+    notify_user(request.user, 'SECURITY', 'Google account disconnected',
+                'Google sign-in was disconnected from your account.', 'settings.html')
     return Response(status=204)

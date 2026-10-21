@@ -4,8 +4,9 @@ from django.contrib.auth.models import User
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ObjectDoesNotExist, ValidationError as DjangoValidationError
 from django.urls import reverse
+from django.utils import timezone
 from rest_framework import serializers
-from .models import AuditLog, Announcement, NotificationBroadcast, LeavePolicySettings, LeaveType, AttendanceRecord, AttendanceSettings, ChatConversation, ChatMessage, Employee, EmployeeDocument, Holiday, LeaveRequest, Notification, UserProfile, WorkFromHomeRequest
+from .models import ReminderSettings, AuditLog, Announcement, NotificationBroadcast, LeavePolicySettings, LeaveType, AttendanceRecord, AttendanceSettings, ChatConversation, ChatMessage, Employee, EmployeeDocument, Holiday, LeaveRequest, Notification, UserProfile, WorkFromHomeRequest
 
 
 PHONE_RE = re.compile(r'^[0-9+\-() ]{7,15}$')
@@ -41,6 +42,7 @@ class EmployeeSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'user_id', 'employee_id', 'username', 'email', 'first_name', 'last_name', 'full_name',
             'phone', 'department', 'designation', 'joining_date', 'status', 'is_active', 'has_salary_structure',
+            'deactivated_at', 'onboarding_status',
         ]
         read_only_fields = fields
 
@@ -316,16 +318,40 @@ class EmployeeDocumentSerializer(serializers.ModelSerializer):
     employee_id = serializers.ReadOnlyField(source='employee.id')
     file_url = serializers.SerializerMethodField()
 
+    expiry_status = serializers.SerializerMethodField()
+    days_to_expiry = serializers.SerializerMethodField()
+    employee_name = serializers.SerializerMethodField()
+
     class Meta:
         model = EmployeeDocument
         fields = [
-            'id', 'employee_id', 'employee_username', 'title', 'document_type', 'custom_document_type',
-            'file', 'file_url', 'status', 'review_note', 'uploaded_at', 'updated_at',
+            'id', 'employee_id', 'employee_username', 'employee_name', 'title', 'document_type', 'custom_document_type',
+            'file', 'file_url', 'status', 'review_note', 'expiry_date', 'expiry_status', 'days_to_expiry',
+            'uploaded_at', 'updated_at',
         ]
         read_only_fields = [
-            'id', 'employee_id', 'employee_username', 'file_url', 'status',
-            'review_note', 'uploaded_at', 'updated_at',
+            'id', 'employee_id', 'employee_username', 'employee_name', 'file_url', 'status',
+            'review_note', 'expiry_status', 'days_to_expiry', 'uploaded_at', 'updated_at',
         ]
+
+    def _warn_days(self):
+        if 'warn_days' not in self.context:
+            self.context['warn_days'] = ReminderSettings.load().warning_window_days
+        return self.context['warn_days']
+
+    def get_expiry_status(self, obj):
+        return obj.expiry_state(warn_days=self._warn_days())
+
+    def get_days_to_expiry(self, obj):
+        return (obj.expiry_date - timezone.localdate()).days if obj.expiry_date else None
+
+    def get_employee_name(self, obj):
+        return obj.employee.get_full_name() or obj.employee.username
+
+    def validate_expiry_date(self, value):
+        if value is not None and value < timezone.localdate():
+            raise serializers.ValidationError('This document has already expired. Upload a current one.')
+        return value
 
     def get_file_url(self, obj):
         # Documents are private: they are served by an authenticated endpoint, never from /media/.
@@ -519,7 +545,7 @@ class AttendanceRecordSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'employee_user_id', 'employee_username', 'employee_name', 'employee_code', 'date', 'check_in_at',
             'check_out_at', 'check_in_distance_meters', 'check_out_distance_meters', 'status', 'worked_minutes',
-            'shift_name', 'scheduled_start', 'late_minutes',
+            'shift_name', 'scheduled_start', 'late_minutes', 'is_corrected',
         ]
 
     def get_employee_name(self, obj):
@@ -613,5 +639,5 @@ class NotificationBroadcastSerializer(serializers.ModelSerializer):
 class AuditLogSerializer(serializers.ModelSerializer):
     class Meta:
         model = AuditLog
-        fields = ['id', 'actor_name', 'module', 'action', 'entity_type', 'entity_id', 'summary', 'ip_address', 'created_at']
+        fields = ['id', 'actor_name', 'subject_name', 'module', 'action', 'entity_type', 'entity_id', 'summary', 'ip_address', 'created_at']
         read_only_fields = fields

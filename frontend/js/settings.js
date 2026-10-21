@@ -1,6 +1,6 @@
 (async function () {
   'use strict';
-  const { $, html, icon, api } = App;
+  const { $, $$, html, icon, api, fmt, field } = App;
   const user = await App.boot({ nav: 'settings' });
   $('#who').textContent = user.username;
   $('#signOut').innerHTML = html`${icon('logout')} Sign out`;
@@ -51,4 +51,72 @@
     } catch (error) { box.innerHTML = html`<p class="muted" style="margin:0">Could not load Google account status.</p>`; }
   }
   loadGoogle();
+
+  /* ---- Notification preferences (security and other mandatory kinds cannot be switched off) ---- */
+  // The cards are added here so settings.html (read-only in this checkout) does not need to change.
+  const grid = $('#googleCard').parentElement;
+  grid.insertAdjacentHTML('beforeend', String(html`
+    <section class="card" id="notifications">
+      <div class="card-header"><div><h2>Notifications</h2><p>Choose which optional notifications you receive in PayrollPro.</p></div></div>
+      <form class="card-body stack-sm" id="prefForm"><span class="skeleton" style="width:60%"></span></form>
+    </section>
+    <section class="card" id="remindersCard" hidden>
+      <div class="card-header"><div><h2>Automatic reminders</h2><p>Document expiry, requests waiting for approval and unfinished onboarding.</p></div></div>
+      <form class="card-body form-grid" id="reminderForm"></form>
+    </section>`));
+  const prefForm = $('#prefForm');
+  const MANDATORY_LABELS = {
+    SECURITY: 'security alerts (password and Google sign-in changes)', EMPLOYEE: 'payslips and your employee record',
+    PAYROLL: 'payroll', ONBOARDING: 'onboarding', GENERAL: 'messages sent to you by an administrator',
+  };
+  async function loadPrefs() {
+    try {
+      const data = await api.get('/notifications/preferences/');
+      prefForm.innerHTML = html`<div class="pref-list">${data.optional.map(p => html`<label class="check"><span>${p.label}</span><input type="checkbox" name="${p.kind}"${p.enabled ? App.raw(' checked') : ''}></label>`)}</div>
+        <p class="muted" style="margin:0">${icon('lock', 'icon-sm')} Always on: ${data.mandatory.map(m => MANDATORY_LABELS[m.kind] || m.label.toLowerCase()).join(', ')}.</p>
+        <div><button class="btn btn-primary" type="submit">Save notification settings</button></div>`;
+    } catch (error) { prefForm.innerHTML = html`<p class="muted" style="margin:0">Could not load notification settings. ${error.message}</p>`; }
+  }
+  prefForm.addEventListener('submit', async event => {
+    event.preventDefault();
+    const preferences = Object.fromEntries($$('input[type=checkbox]', prefForm).map(box => [box.name, box.checked]));
+    try { await api.put('/notifications/preferences/', { preferences }); App.toast('Notification settings saved.'); } catch (error) { App.error(error); }
+  });
+  loadPrefs();
+  if (location.hash === '#notifications') setTimeout(() => $('#notifications').scrollIntoView({ block: 'start' }), 300);
+
+  /* ---- Administrators: automatic reminders ---- */
+  if (user.role === 'ADMIN') {
+    $('#remindersCard').hidden = false;
+    const form = $('#reminderForm');
+    const loadReminders = async () => {
+      try {
+        const s = await api.get('/reminders/settings/');
+        form.innerHTML = html`
+          ${field({ label: 'Send automatic reminders', name: 'enabled', type: 'checkbox', value: s.enabled, span2: true })}
+          ${field({ label: 'Document expiry reminders (days before)', name: 'days', value: s.document_reminder_days.join(', '), hint: 'Comma-separated, e.g. 30, 7, 1. A reminder is also sent when a document expires.', span2: true, attrs: 'inputmode="numeric" pattern="[0-9, ]+"' })}
+          ${field({ label: 'Remind about requests waiting at least (days)', name: 'pending_after_days', type: 'number', value: s.pending_after_days, attrs: 'min="1" max="60"', hint: 'Leave, WFH, attendance corrections, overtime and documents.' })}
+          <div class="field"><span class="hint">Last run: ${s.last_run_at ? fmt.dateTime(s.last_run_at) : 'never'}. Reminders also run automatically when a dashboard is opened (at most every 6 hours), or daily with <code>manage.py send_reminders</code>.</span></div>
+          <div class="span-2 actions" style="justify-content:flex-start"><button class="btn btn-primary" type="submit">Save reminders</button><button class="btn" type="button" id="runNow">${icon('bell')} Send due reminders now</button></div>`;
+        $('#runNow').addEventListener('click', async () => {
+          try {
+            const r = await api.post('/reminders/run/');
+            App.toast(r.enabled ? `Sent ${r.documents} document, ${r.pending_digest} pending and ${r.onboarding} onboarding reminder(s).` : 'Reminders are switched off.');
+            loadReminders();
+          } catch (error) { App.error(error); }
+        });
+      } catch (error) { form.innerHTML = html`<p class="muted span-2" style="margin:0">Could not load reminder settings. ${error.message}</p>`; }
+    };
+    form.addEventListener('submit', async event => {
+      event.preventDefault();
+      const data = new FormData(form);
+      const days = String(data.get('days') || '').split(',').map(v => v.trim()).filter(Boolean).map(Number);
+      if (!days.length || days.some(d => !Number.isInteger(d) || d < 0 || d > 365)) { App.toast('Enter reminder days between 0 and 365, separated by commas.', 'error'); return; }
+      try {
+        await api.put('/reminders/settings/', { enabled: data.get('enabled') === 'on', document_reminder_days: days, pending_after_days: Number(data.get('pending_after_days')) });
+        App.toast('Reminder settings saved.'); loadReminders();
+      } catch (error) { App.error(error); }
+    });
+    loadReminders();
+  }
 })();

@@ -12,17 +12,19 @@
 <body>
 <main id="content">
   <div class="page-header">
-    <div><h1>Audit log</h1><p>Who did what, in which module, when and from which IP address.</p></div>
-    <div class="page-actions"></div>
+    <div><h1>Audit log</h1><p>Who did what, to which employee, in which module, when and from which IP address. Entries cannot be edited or deleted.</p></div>
+    <div class="page-actions"><span class="muted" id="count"></span></div>
   </div>
   <section class="card">
     <div class="toolbar">
       <div class="input-group grow"><span id="searchIcon"></span><input class="input" id="search" type="search" placeholder="Search summary or person" aria-label="Search audit log"></div>
-      <select class="select" id="entity" aria-label="Filter by module"><option value="">All modules</option><option value="Authentication">Authentication</option><option value="Employees">Employees</option><option value="Attendance">Attendance</option><option value="Shifts">Shifts</option><option value="Overtime">Overtime</option><option value="Leave">Leave</option><option value="Work from home">Work from home</option><option value="Documents">Documents</option><option value="Payroll">Payroll</option><option value="Reports">Reports</option><option value="Holidays">Holidays</option><option value="Announcements">Announcements</option><option value="Notifications">Notifications</option><option value="AI assistance">AI assistance</option></select>
+      <select class="select" id="module" aria-label="Filter by module"><option value="">All modules</option></select>
+      <select class="select" id="action" aria-label="Filter by action"><option value="">All actions</option></select>
+      <select class="select" id="employee" aria-label="Filter by employee"><option value="">All employees</option></select>
       <input class="input" type="date" id="from" aria-label="From date" style="width:auto">
       <input class="input" type="date" id="to" aria-label="To date" style="width:auto">
     </div>
-    <div class="table-wrap"><table class="table"><thead><tr><th>When</th><th>Who</th><th>Module</th><th>Action</th><th>Details</th><th>IP address</th></tr></thead><tbody id="rows"></tbody></table></div>
+    <div class="table-wrap"><table class="table"><thead><tr><th>When</th><th>Who</th><th>Employee</th><th>Module</th><th>Action</th><th>Details</th><th>IP address</th></tr></thead><tbody id="rows"></tbody></table></div>
     <div class="pager" id="pager" hidden></div>
   </section>
 </main>

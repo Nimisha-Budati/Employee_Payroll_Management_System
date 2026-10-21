@@ -224,6 +224,10 @@ PAYROLL_WORKING_WEEKDAYS = [int(day) for day in _env_list('PAYROLL_WORKING_WEEKD
 # Standard working day used when an employee has no shift; time beyond it is candidate overtime
 # (only overtime records approved by an administrator are paid).
 PAYROLL_STANDARD_DAILY_HOURS = float(os.environ.get('PAYROLL_STANDARD_DAILY_HOURS', '8'))
+# Attendance correction requests may be made for days up to this many days ago.
+ATTENDANCE_CORRECTION_WINDOW_DAYS = int(os.environ.get('ATTENDANCE_CORRECTION_WINDOW_DAYS', '60'))
+# Payroll variance preview flags a net-salary change of at least this many percent (twice this = high).
+PAYROLL_VARIANCE_THRESHOLD_PERCENT = float(os.environ.get('PAYROLL_VARIANCE_THRESHOLD_PERCENT', '10'))
 
 
 # --- AI assistance (Google Gemini) ------------------------------------------

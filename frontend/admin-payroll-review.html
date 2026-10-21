@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f4f8f6">
+  <script src="js/theme.js"></script>
+  <title>Payroll review · PayrollPro</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+<main id="content">
+  <div class="page-header">
+    <div><h1>Payroll variance review</h1><p>Compare each employee's payslip with the previous month before finalising. Nothing here changes a salary.</p></div>
+    <div class="page-actions">
+      <select class="select" id="month" aria-label="Month"></select>
+      <select class="select" id="year" aria-label="Year"></select>
+      <a class="btn" href="admin-payroll.html" id="backLink">Payroll runs</a>
+    </div>
+  </div>
+  <section class="grid grid-4" id="stats" aria-label="Variance summary"></section>
+  <section class="card" style="margin-top:20px">
+    <div class="card-body review-box" id="reviewBox"></div>
+  </section>
+  <section class="card" style="margin-top:20px">
+    <div class="toolbar">
+      <div class="input-group grow"><span id="searchIcon"></span><input class="input" id="search" type="search" placeholder="Search by name, ID or department" aria-label="Search employees"></div>
+      <select class="select" id="show" aria-label="Show"><option value="flagged">Flagged only</option><option value="all">All employees</option></select>
+    </div>
+    <div class="table-wrap"><table class="table">
+      <thead><tr><th>Employee</th><th>Status</th><th class="right" id="prevHead">Previous net</th><th class="right">This month net</th><th class="right">Change</th><th>Flags</th><th class="right"><span class="sr-only">Details</span></th></tr></thead>
+      <tbody id="rows"></tbody>
+    </table></div>
+  </section>
+</main>
+<script src="js/app.js"></script>
+<script src="js/payroll-review.js"></script>
+</body>
+</html>

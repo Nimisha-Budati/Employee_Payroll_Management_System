@@ -107,3 +107,23 @@ class Payslip(models.Model):
 
     def __str__(self):
         return f'{self.employee_code} {self.year}-{self.month:02d} ({self.status})'
+
+
+class PayrollReview(models.Model):
+    """An administrator's sign-off of the variance preview for a payroll month (required before finalising)."""
+
+    year = models.PositiveSmallIntegerField()
+    month = models.PositiveSmallIntegerField(validators=[MinValueValidator(1), MaxValueValidator(12)])
+    reviewed_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='+')
+    reviewed_at = models.DateTimeField(auto_now_add=True)
+    draft_count = models.PositiveIntegerField(default=0)
+    flagged_count = models.PositiveIntegerField(default=0)
+    net_total = models.DecimalField(default=0, **MONEY)
+    note = models.CharField(max_length=300, blank=True)
+
+    class Meta:
+        ordering = ['-reviewed_at', '-id']
+        indexes = [models.Index(fields=['year', 'month', 'reviewed_at'])]
+
+    def __str__(self):
+        return f'Payroll review {self.year}-{self.month:02d} at {self.reviewed_at:%Y-%m-%d %H:%M}'

@@ -27,7 +27,8 @@
       <div class="card stat"><span class="stat-icon blue">${icon('wallet')}</span><div><div class="stat-label">Net payable</div><div class="stat-value">${fmt.compactMoney(t.net)}</div><div class="stat-note">${fmt.money(t.net, { decimals: 0 })}</div></div></div>`;
     const finalize = $('#finalizeBtn');
     finalize.hidden = !t.drafts;
-    finalize.innerHTML = html`${icon('check')} Finalise ${t.drafts} draft${t.drafts === 1 ? '' : 's'}`;
+    finalize.innerHTML = html`${icon('check')} Review & finalise ${t.drafts} draft${t.drafts === 1 ? '' : 's'}`;
+    $('#varianceBtn').hidden = !t.count;
   }
 
   async function load() {
@@ -136,23 +137,15 @@
     App.modal({ title: 'Payroll run complete', body, cancelLabel: 'Close' });
   }
 
-  async function finalize() {
-    const period = fmt.period(state.year, state.month);
-    const ok = await App.confirm({
-      title: `Finalise ${period}?`,
-      message: `All ${totals.drafts} draft payslip(s) will be marked paid and become visible to employees. Paid payslips can no longer be edited.`,
-      confirmLabel: 'Finalise payroll',
-    });
-    if (!ok) return;
-    try {
-      const result = await api.post('/payroll/finalize/', { year: state.year, month: state.month });
-      App.toast(`${result.finalized} payslip${result.finalized === 1 ? '' : 's'} finalised.`);
-      load();
-    } catch (error) { App.error(error); }
+  // Finalising happens on the variance review page, which requires a recorded review first.
+  function finalize() {
+    location.href = `admin-payroll-review.html?year=${state.year}&month=${state.month}`;
   }
 
   $('#runBtn').addEventListener('click', runPayroll);
   $('#finalizeBtn').addEventListener('click', finalize);
+  $('#varianceBtn').innerHTML = html`${icon('trending')} Variance vs last month`;
+  $('#varianceBtn').addEventListener('click', finalize);
   $('#exportBtn').addEventListener('click', () => App.download('/payroll/export/', `payroll_${state.year}-${String(state.month).padStart(2, '0')}.csv`, { year: state.year, month: state.month }));
   $('#month').addEventListener('change', e => { state.month = Number(e.target.value); state.page = 1; load(); });
   $('#year').addEventListener('change', e => { state.year = Number(e.target.value); state.page = 1; load(); });

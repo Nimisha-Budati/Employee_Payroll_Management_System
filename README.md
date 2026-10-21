@@ -156,11 +156,19 @@ Each employee has one monthly salary structure:
 4. **Adjust a draft:** loss-of-pay days (whole or half days, no more than the working days), bonus, other deductions and a note. Amounts are recalculated, and the net salary cannot go negative.
 5. **Recalculate** a draft from the current salary structure and attendance (this discards manual adjustments)
 6. **Delete** a draft
-7. **Finalise** the month: drafts become *Paid* and are published to employees, who are notified
+7. **Review the variance** against the previous month (see 1.9a), record the review, then **finalise**: drafts become *Paid* and are published to employees, who are notified. Finalising is refused until a current review exists
 8. **Export CSV** payroll register for the month (opens in Excel; formula injection is neutralised)
 9. **View/download a PDF payslip** for any employee
 
 Paid payslips can no longer be changed. Each payslip stores a snapshot of the employee's code, name, department and designation, so later changes to the employee don't alter old payslips. Every run, adjustment, recalculation, deletion, finalisation and export is audited.
+
+### 1.9a Payroll variance review (admin)
+
+- Before finalising, **Payroll runs → Review & finalise** opens a side-by-side comparison of every employee's payslip with the previous month: each earning and deduction, working/LOP days and overtime hours, with the amount and % change
+- **Flags** (nothing is changed automatically): net salary change of at least 10% (*check*) or 20% (*high*), zero net pay, a paid employee with no payslip this month, loss-of-pay days up by 2+ or at least half the month, overtime above 25% of fixed pay, drafts that no longer match current records (*stale*), manual adjustments, salary-structure changes, new joiners and leavers
+- **Reasons from recorded data:** salary-structure changes (who and when), loss-of-pay days split into unpaid leave, days with no check-in/leave/WFH (with dates) and days before joining, approved overtime records, bonus source, holidays changing working days, role changes, payslip notes and manual adjustments
+- **Review:** the administrator records a review (confirming flagged employees or adding a note). Editing, recalculating or generating a draft afterwards requires a new review. Reviews and finalisation are audited
+- The threshold is configurable (`PAYROLL_VARIANCE_THRESHOLD_PERCENT`)
 
 ### 1.10 Payslips (employee)
 
@@ -173,6 +181,7 @@ Paid payslips can no longer be changed. Each payslip stores a snapshot of the em
 
 - Monthly payroll totals for a selected year: payslip count, gross, deductions, net, drafts and paid, shown as a chart and table
 - **Cost by department** for a selected month: headcount, gross and net
+- **Analytics page:** payroll cost, net pay and overtime cost trends, late check-ins and late rate, absenteeism (loss-of-pay days ÷ working days), leave days and leave utilisation by type, headcount with joiners and leavers, a department breakdown, and every summary compared with the previous period of the same length. Filters: month range (up to 24 months) and department; empty states when there is no data; Excel export of the analytics (three sheets)
 - **Excel (.xlsx) reports built with OpenPyXL** for employees, attendance (with late minutes and a per-employee summary), leave (with per-employee day totals), overtime and payroll (register + department totals). Filters: date range or payroll year/month, department, employee, status, leave type, late-only. Styled headers, frozen header row, auto-filter, totals rows, ₹ number formats; user text is always stored as text (no formula injection). Every export is audited
 
 ### 1.12 Holiday calendar
@@ -217,6 +226,37 @@ Paid payslips can no longer be changed. Each payslip stores a snapshot of the em
 - **Chat history:** saved in PostgreSQL in *Pinned* and *Recent chats* sections; a three-dot menu on each chat offers **Rename** (inline, Enter saves, Escape cancels), **Pin / Unpin** and **Delete**; **Search** finds chats by title, your questions or the assistant's answers, with highlighted snippets
 - **Knowledge base (admin):** company overview, leave policy and FAQ text the assistants may quote
 - Grounded and private: the model only receives the asking user's own records (or what an admin chose) plus system rules; the API key stays on the server; per-user hourly limit; clear error messages when Gemini is unavailable
+
+### 1.16b Attendance corrections
+
+- Employees cannot edit attendance. On **Attendance & shift** they click **Request correction** (or *Correct* on a day) and choose the date, the type (*missed check-in*, *missed check-out*, *incorrect times*, *worked but no attendance recorded*), the correct times (check-out may be the next day for overnight shifts) and a reason
+- Validation: no future dates or times, within the last 60 days (`ATTENDANCE_CORRECTION_WINDOW_DAYS`), not before joining, not in a month whose payroll is finalised, check-out after check-in and within 24 hours, and the type must match what is recorded. One pending request per employee and day (database constraint)
+- Employees see the status and the administrator's response and can cancel while pending
+- **Admin page *Attendance corrections*:** filter by status, type, department, dates and search; recorded and requested values side by side; approve (optional note) or reject (reason required). Approval updates the attendance record, marks it *Corrected* and recalculates late minutes from the shift; the audit log stores the original value, corrected value, approver, reason and time
+
+### 1.16c Team calendar
+
+- **Company → Team calendar** shows approved leave, approved work from home, shifts and holidays in a month grid (with an event list below; phones get the list only), month navigation and event-type toggles
+- **Administrators:** every active employee, filters for employee, department, event type and a custom date range (up to 62 days); explicit shift assignments are shown and the default shift is noted
+- **Employees:** *My schedule* (own leave with type, WFH, own shift, holidays) and *Team availability* (colleagues in their own department shown only as *On leave* / *Working from home*, never the leave type or reason)
+
+### 1.16d Employee onboarding
+
+- Each new employee gets a checklist computed from data PayrollPro already stores: first and last name, email, phone, department and designation, postal address (optional setting), profile photo (optional), required documents (default: identity and address proof; a document counts once **verified** and not expired) and the salary structure. No new personal fields are collected
+- The employee sees the checklist and links on their dashboard; when everything is provided the administrators are notified once (*Ready for review*)
+- **Admin page *Onboarding*:** tabs for open, ready, in progress and completed; missing items per employee; view checklist; send a reminder; **mark complete** (refused while items are missing); reopen with a reason; checklist settings. Employees who existed before this feature were marked completed by the migration
+- Create, edit, deactivate and reactivate employees work as before; deactivation and reactivation now record the date and are audited
+
+### 1.16e Document expiry and reminders
+
+- Documents can have an **expiry date** (employee at upload, administrator during verification or later). Expiry status (*Valid*, *Expiring soon*, *Expired*, *No expiry*) is shown separately from the review status; both document pages filter by expiry, and dashboards show counts
+- **Automatic reminders** (Settings → *Automatic reminders*, admin): document reminders to the employee and administrators on configurable days before expiry (default 30, 7 and 1) and once on expiry; a daily digest to administrators of leave, WFH, corrections, overtime and documents waiting at least *N* days; a weekly onboarding reminder to employees with missing items. Each reminder is sent once (logged). Reminders run automatically when a dashboard is opened (at most every 6 hours), from **Send due reminders now**, or from `python manage.py send_reminders` (schedule it daily)
+
+### 1.16f Notification preferences and audit filters
+
+- **Settings → Notifications:** switch optional kinds off (announcements, attendance, chat, corrections, documents, holidays, leave, overtime, reminders, shifts, WFH). Security alerts (password reset/change, Google connect/disconnect), payslip and employee-record messages, onboarding and messages sent by an administrator are always delivered
+- The notifications page has *All / Unread* tabs (with the unread count) and a type filter
+- **Audit log:** filter by date range, employee (the person the action was about, or who did it), action and module (filter options come from the recorded entries); each entry shows the affected employee. Audit entries are append-only: there is no write API and the model refuses updates and deletes
 
 ### 1.17 Profile and settings
 
@@ -298,6 +338,10 @@ Employee_Payroll_Management_System/
 | `admin-salary.html` – Salary structures | `employee-profile.html` – Profile | |
 | `admin-reports.html` – Reports + Excel | `overtime.html` – Overtime (shared) | `ai-assistant.html` – AI assistant |
 | `admin-shifts.html` – Shifts | | |
+| `admin-payroll-review.html` – Payroll variance review | `calendar.html` – Team calendar (shared) | |
+| `admin-analytics.html` – Analytics | | |
+| `admin-corrections.html` – Attendance corrections | | |
+| `admin-onboarding.html` – Onboarding | | |
 | `admin-holidays.html` – Holiday calendar | | |
 | `admin-audit.html` – Audit log | | |
 | `admin-profile.html` – Profile | | |
@@ -360,6 +404,8 @@ Use the **same hostname** for the frontend and the API (`127.0.0.1` for both, no
 | `COMPANY_NAME` | `PayrollPro` | Shown on PDF payslips |
 | `PAYROLL_WORKING_WEEKDAYS` | `0,1,2,3,4` | Working weekdays (0 = Monday … 6 = Sunday) |
 | `PAYROLL_STANDARD_DAILY_HOURS` | `8` | Standard day for employees without a shift (time beyond it is candidate overtime) |
+| `PAYROLL_VARIANCE_THRESHOLD_PERCENT` | `10` | Net-salary change that the variance review flags (twice this is *high*) |
+| `ATTENDANCE_CORRECTION_WINDOW_DAYS` | `60` | How many days back an employee may request an attendance correction |
 | `GEMINI_API_KEY` | empty | Google Gemini API key; empty switches the AI features off |
 | `GEMINI_MODEL` | `gemini-flash-latest` | Gemini model name; `python manage.py gemini_check` lists the models your key can use and tests this one |
 | `GEMINI_TIMEOUT_SECONDS`, `AI_MAX_REQUESTS_PER_HOUR` | `30`, `40` | AI request timeout and per-user hourly limit |
@@ -530,6 +576,28 @@ All endpoints are under `/api/`. Authentication is by session cookie. Unsafe req
 | GET | `ai/attendance-insights/stats/` | All | Statistics only (no AI key needed) |
 | GET, PUT | `ai/knowledge/` | Admin | AI knowledge base |
 
+### Variance review, corrections, calendar, onboarding, reminders and analytics
+
+| Method | Endpoint | Who | Description |
+| --- | --- | --- | --- |
+| GET | `payroll/variance/` | Admin | Comparison with the previous month (`year`, `month`, `flagged=true`) |
+| POST | `payroll/variance/review/` | Admin | Record a review (`year`, `month`, `note`, `acknowledge_flags`); required before `payroll/finalize/` (409 `review_required` otherwise) |
+| GET | `reports/analytics/` | Admin | Trends and comparisons (`from`, `to` as YYYY-MM, `department`) |
+| GET | `reports/excel/analytics/` | Admin | Analytics workbook |
+| GET, POST | `attendance/corrections/` | All | Own requests (admin: all; `status`, `correction_type`, `department`, `employee`, `from`, `to`, `search`, *paginated*) / request a correction (employee) |
+| POST | `attendance/corrections/<id>/review/` | Admin | Approve / reject (`status`, `review_note`) |
+| POST | `attendance/corrections/<id>/cancel/` | Owner | Cancel a pending request |
+| GET | `calendar/` | All | Events (`start`, `end`, `types`; admin `department`, `employee`; employee `scope` mine/team) |
+| GET | `onboarding/` | Admin | Checklists (`state` OPEN/READY/IN_PROGRESS/COMPLETED, `search`, `department`) |
+| GET | `onboarding/me/` | All | Own checklist |
+| GET, PUT | `onboarding/settings/` | Admin | Required items |
+| POST | `onboarding/<employee id>/complete/`, `reopen/`, `remind/` | Admin | Complete (refused while items are missing), reopen (`note`), remind |
+| PUT | `documents/<id>/expiry/` | Admin | Set or clear the expiry date |
+| GET, PUT | `notifications/preferences/` | All | Optional notification kinds (`preferences`: {kind: true/false}) |
+| GET, PUT | `reminders/settings/` | Admin | Reminder days, pending threshold, on/off |
+| POST | `reminders/run/` | Admin | Send due reminders now |
+| GET | `audit-logs/meta/` | Admin | Modules and actions for the filters (`audit-logs/` also accepts `employee`, `actor`, `action`) |
+
 The Django admin site is available at `http://127.0.0.1:8000/admin/`.
 
 ---
@@ -557,4 +625,10 @@ cd backend
 python manage.py test      # needs a PostgreSQL user allowed to create a test database
 ```
 
-The suite (164 tests) covers the admin-controlled leave policy (types, limits, leave year, carry forward, adjustments, validation, cancellation), AI chat rename/pin/search, authentication and permissions, employees, leave, attendance and late minutes, shifts, overtime approval and its payroll integration, DA/bonus calculations, documents, Google sign-in, notifications with expiry, audit coverage, Excel exports, the AI assistants (with the Gemini HTTP call stubbed), and the payroll calculator, runs, adjustments, finalisation, PDFs, exports and reports. Uploaded test files go to a temporary folder, not `backend/media/`.
+Reminders can be scheduled daily (for example with Windows Task Scheduler):
+
+```bash
+python manage.py send_reminders
+```
+
+The suite (192 tests) covers the payroll variance review and the review required before finalising, attendance correction requests, the team calendar, onboarding checklists, document expiry and reminders, notification preferences, audit filters and append-only audit entries, analytics and its Excel export, the admin-controlled leave policy (types, limits, leave year, carry forward, adjustments, validation, cancellation), AI chat rename/pin/search, authentication and permissions, employees, leave, attendance and late minutes, shifts, overtime approval and its payroll integration, DA/bonus calculations, documents, Google sign-in, notifications with expiry, audit coverage, Excel exports, the AI assistants (with the Gemini HTTP call stubbed), and the payroll calculator, runs, adjustments, finalisation, PDFs, exports and reports. Uploaded test files go to a temporary folder, not `backend/media/`.

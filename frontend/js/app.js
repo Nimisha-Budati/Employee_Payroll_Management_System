@@ -192,6 +192,9 @@
     VERIFIED: ['success', 'Verified'], CHECKED_IN: ['info', 'Checked in'], CHECKED_OUT: ['success', 'Completed'],
     FIXED: ['accent', 'Fixed'], TENTATIVE: ['warning', 'Tentative'],
     LATE: ['warning', 'Late'], ON_TIME: ['success', 'On time'], EXPIRED: [null, 'Expired'], LIVE: ['success', 'Active'],
+    EXPIRING: ['warning', 'Expiring soon'], VALID: ['success', 'Valid'], NONE: [null, 'No expiry'], CORRECTED: ['info', 'Corrected'],
+    IN_PROGRESS: ['warning', 'In progress'], READY: ['info', 'Ready for review'], COMPLETED: ['success', 'Completed'],
+    high: ['danger', 'High'], medium: ['warning', 'Check'], info: ['info', 'Info'],
   };
   App.badge = function badge(status, label) {
     const [tone, text] = STATUS_BADGES[status] || [null, status];
@@ -523,7 +526,9 @@
       ['Overview', [['dashboard', 'Dashboard', 'admin-dashboard.html', 'grid'], ['ai', 'AI assistant', 'ai-assistant.html', 'sparkle']]],
       ['People', [
         ['employees', 'Employees', 'employee-management.html', 'users'],
+        ['onboarding', 'Onboarding', 'admin-onboarding.html', 'checkCircle'],
         ['attendance', 'Attendance', 'admin-attendance.html', 'pin'],
+        ['corrections', 'Attendance corrections', 'admin-corrections.html', 'edit'],
         ['shifts', 'Shifts', 'admin-shifts.html', 'clock'],
         ['overtime', 'Overtime', 'overtime.html', 'timer'],
         ['leave', 'Leave requests', 'admin-leave.html', 'calendar'],
@@ -535,8 +540,10 @@
         ['payroll', 'Payroll runs', 'admin-payroll.html', 'wallet'],
         ['salary', 'Salary structures', 'admin-salary.html', 'rupee'],
         ['reports', 'Reports', 'admin-reports.html', 'chart'],
+        ['analytics', 'Analytics', 'admin-analytics.html', 'trending'],
       ]],
       ['Company', [
+        ['calendar', 'Team calendar', 'calendar.html', 'grid'],
         ['holidays', 'Holiday calendar', 'admin-holidays.html', 'calendar'],
         ['announcements', 'Announcements', 'announcements.html', 'flag'],
         ['chat', 'Messages', 'chat.html', 'chat'],
@@ -554,6 +561,7 @@
       ]],
       ['My pay', [['payslips', 'Payslips', 'employee-payslips.html', 'receipt']]],
       ['Company', [
+        ['calendar', 'Team calendar', 'calendar.html', 'grid'],
         ['holidays', 'Holiday calendar', 'employee-holidays.html', 'calendar'],
         ['announcements', 'Announcements', 'announcements.html', 'flag'],
         ['chat', 'Messages', 'chat.html', 'chat'],

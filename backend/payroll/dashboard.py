@@ -42,8 +42,16 @@ def admin_dashboard(request):
         'inactive': Employee.objects.exclude(status='ACTIVE').count(),
         'joined_this_month': Employee.objects.filter(joining_date__year=today.year, joining_date__month=today.month).count(),
         'pending_onboarding': User.objects.filter(userprofile__role='EMPLOYEE', employee__isnull=True, is_active=True).count(),
+        'onboarding_in_progress': active.filter(onboarding_status=Employee.ONBOARDING_PENDING, onboarding_ready_at__isnull=True).count(),
+        'onboarding_ready': active.filter(onboarding_status=Employee.ONBOARDING_PENDING, onboarding_ready_at__isnull=False).count(),
     }
+    from accounts.models import AttendanceCorrectionRequest, ReminderSettings
+    from accounts.reminders import maybe_run_reminders
+
+    maybe_run_reminders()
+    warn_until = today + timedelta(days=ReminderSettings.load().warning_window_days)
     pending = {
+        'corrections': AttendanceCorrectionRequest.objects.filter(status='PENDING').count(),
         'leaves': LeaveRequest.objects.filter(status='PENDING').count(),
         'wfh': WorkFromHomeRequest.objects.filter(status='PENDING').count(),
         'documents': EmployeeDocument.objects.filter(status='PENDING').count(),
@@ -119,6 +127,10 @@ def admin_dashboard(request):
     return Response({
         'employees': employees,
         'pending': pending,
+        'documents': {
+            'expired': EmployeeDocument.objects.filter(expiry_date__lt=today, employee__is_active=True).count(),
+            'expiring': EmployeeDocument.objects.filter(expiry_date__gte=today, expiry_date__lte=warn_until, employee__is_active=True).count(),
+        },
         'attendance': attendance,
         'leave': leave,
         'overtime': overtime_stats,
@@ -148,6 +160,17 @@ def employee_dashboard(request):
 
     upcoming_holidays = Holiday.objects.filter(date__gte=today).order_by('date')[:3]
 
+    from accounts.models import AttendanceCorrectionRequest, ReminderSettings
+    from accounts.onboarding import summary as onboarding_summary
+    from accounts.reminders import maybe_run_reminders
+
+    maybe_run_reminders()
+    warn_until = today + timedelta(days=ReminderSettings.load().warning_window_days)
+    onboarding = None
+    if employee is not None and employee.onboarding_status != Employee.ONBOARDING_COMPLETED:
+        onboarding = onboarding_summary(employee)
+        onboarding.pop('note', None)
+
     return Response({
         'employee': {
             'employee_id': employee.employee_id,
@@ -163,6 +186,12 @@ def employee_dashboard(request):
             'pending_wfh': WorkFromHomeRequest.objects.filter(employee=user, status='PENDING').count(),
             'pending_documents': EmployeeDocument.objects.filter(employee=user, status='PENDING').count(),
             'pending_overtime': month_overtime.filter(status=OvertimeRecord.PENDING).count(),
+            'pending_corrections': AttendanceCorrectionRequest.objects.filter(employee=user, status='PENDING').count(),
+        },
+        'onboarding': onboarding,
+        'documents': {
+            'expired': EmployeeDocument.objects.filter(employee=user, expiry_date__lt=today).count(),
+            'expiring': EmployeeDocument.objects.filter(employee=user, expiry_date__gte=today, expiry_date__lte=warn_until).count(),
         },
         'attendance': {
             'days_present_this_month': month_records.count(),

@@ -3,18 +3,28 @@
   const { $, $$, html, icon, fmt, api } = App;
   await App.boot({ nav: 'notifications' });
   $('#markAll').innerHTML = html`${icon('check')} Mark all as read`;
-  const ICONS = { LEAVE: 'calendar', WFH: 'home', DOCUMENT: 'file', ATTENDANCE: 'pin', HOLIDAY: 'calendar', ANNOUNCEMENT: 'flag', CHAT: 'chat', EMPLOYEE: 'user', PAYROLL: 'wallet', GENERAL: 'megaphone', SHIFT: 'clock', OVERTIME: 'timer' };
+  const ICONS = { LEAVE: 'calendar', WFH: 'home', DOCUMENT: 'file', ATTENDANCE: 'pin', HOLIDAY: 'calendar', ANNOUNCEMENT: 'flag', CHAT: 'chat', EMPLOYEE: 'user', PAYROLL: 'wallet', GENERAL: 'megaphone', SHIFT: 'clock', OVERTIME: 'timer', CORRECTION: 'edit', REMINDER: 'bell', SECURITY: 'lock', ONBOARDING: 'checkCircle' };
+  const KINDS = [['', 'All types'], ['LEAVE', 'Leave'], ['WFH', 'Work from home'], ['ATTENDANCE', 'Attendance'], ['CORRECTION', 'Attendance corrections'], ['DOCUMENT', 'Documents'], ['REMINDER', 'Reminders'], ['ONBOARDING', 'Onboarding'], ['PAYROLL', 'Payroll'], ['EMPLOYEE', 'Employee'], ['OVERTIME', 'Overtime'], ['SHIFT', 'Shifts'], ['HOLIDAY', 'Holidays'], ['ANNOUNCEMENT', 'Announcements'], ['CHAT', 'Messages'], ['SECURITY', 'Security'], ['GENERAL', 'From administrators']];
+  const filter = { unread: false, kind: '' };
+  $('#kind').innerHTML = html`${KINDS.map(([value, label]) => html`<option value="${value}">${label}</option>`)}`;
+  $('#kind').addEventListener('change', e => { filter.kind = e.target.value; load(); });
+  $$('[data-read]').forEach(tab => tab.addEventListener('click', () => {
+    filter.unread = tab.dataset.read === 'unread';
+    $$('[data-read]').forEach(t => t.setAttribute('aria-selected', String(t === tab)));
+    load();
+  }));
 
   async function load() {
     $('#list').innerHTML = html`<div class="notice"><span class="skeleton" style="width:60%"></span></div><div class="notice"><span class="skeleton" style="width:40%"></span></div>`;
     try {
-      const { notifications, unread_count: unread } = await api.get('/notifications/');
+      const { notifications, unread_count: unread } = await api.get('/notifications/', { unread: filter.unread ? 'true' : '', kind: filter.kind });
       $('#markAll').disabled = !unread;
+      $('#unreadTab').textContent = unread ? `Unread (${unread})` : 'Unread';
       $('#list').innerHTML = notifications.length ? html`${notifications.map(n => html`<a class="notice${n.is_read ? '' : ' unread'}" href="${n.target_url || '#'}" data-id="${n.id}">
         <span class="notice-icon">${icon(ICONS[n.kind] || 'bell')}</span>
         <div style="min-width:0"><div class="notice-title">${n.title}</div><div class="muted">${n.message}</div>${n.expires_at ? html`<div class="subtle" style="font-size:12px">Expires ${fmt.dateTime(n.expires_at)}</div>` : ''}</div>
         <span class="notice-time">${fmt.relative(n.created_at)}</span></a>`)}`
-        : App.empty({ iconName: 'bell', title: 'You are all caught up', text: 'New notifications will show up here.' });
+        : App.empty({ iconName: 'bell', title: filter.unread || filter.kind ? 'Nothing matches this filter' : 'You are all caught up', text: filter.unread ? 'You have read everything.' : 'New notifications will show up here.' });
       $$('.notice[data-id]', $('#list')).forEach(a => a.addEventListener('click', event => {
         event.preventDefault();
         const href = a.getAttribute('href');

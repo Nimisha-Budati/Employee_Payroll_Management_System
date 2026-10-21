@@ -10,16 +10,39 @@
   if (!data) return;
   const { employee, attendance, requests, latest_payslip: slip } = data;
 
-  if (!employee) $('#notice').innerHTML = html`<div class="alert alert-warning">${icon('info')}<span>Your employment record has not been created yet. An administrator needs to complete it before payroll, attendance and leave work for you.</span></div>`;
+  const notices = [];
+  if (!employee) notices.push(html`<div class="alert alert-warning">${icon('info')}<span>Your employment record has not been created yet. An administrator needs to complete it before payroll, attendance and leave work for you.</span></div>`);
+  const docs = data.documents || { expired: 0, expiring: 0 };
+  if (docs.expired || docs.expiring) {
+    notices.push(html`<div class="alert alert-warning">${icon('alert')}<span>${docs.expired ? `${docs.expired} of your documents ${docs.expired === 1 ? 'has' : 'have'} expired` : ''}${docs.expired && docs.expiring ? ' and ' : ''}${docs.expiring ? `${docs.expiring} ${docs.expiring === 1 ? 'is' : 'are'} expiring soon` : ''}. <a href="employee-documents.html?expiry=${docs.expired ? 'EXPIRED' : 'EXPIRING'}">Upload a renewed copy</a>.</span></div>`);
+  }
+  const onboarding = data.onboarding;
+  if (onboarding) {
+    const percent = onboarding.total ? Math.round((100 * onboarding.done) / onboarding.total) : 0;
+    const link = item => (item.key.startsWith('doc:') ? 'employee-documents.html' : ['name', 'email', 'phone', 'address', 'photo'].includes(item.key) ? 'employee-profile.html' : '');
+    notices.push(html`<section class="card"><div class="card-header"><div><h2>Onboarding checklist</h2>
+        <p>${onboarding.state === 'READY' ? 'Everything is provided. An administrator will review it and complete your onboarding.' : 'Please provide the items below so an administrator can complete your onboarding.'}</p></div>${App.badge(onboarding.state)}</div>
+      <div class="card-body">
+        <div class="progress-label"><span>${onboarding.done} of ${onboarding.total} done</span><span>${percent}%</span></div>
+        <div class="progress" role="progressbar" aria-valuenow="${percent}" aria-valuemin="0" aria-valuemax="100" aria-label="Onboarding progress"><span style="width:${percent}%"></span></div>
+        <ul class="onboarding-list" style="margin-top:16px">${onboarding.items.map(item => html`<li class="${item.done ? 'done' : ''}">
+          <span class="check-mark" aria-hidden="true">${icon(item.done ? 'check' : 'clock')}</span>
+          <div><div class="cell-main">${item.label} <span class="sr-only">${item.done ? 'done' : 'not done'}</span></div>
+            <div class="cell-sub">${item.state}${item.hint ? html` · ${link(item) && item.owner === 'EMPLOYEE' ? html`<a href="${link(item)}">${item.hint}</a>` : item.hint}` : ''}</div></div>
+        </li>`)}</ul>
+      </div></section>`);
+  }
+  $('#notice').innerHTML = html`${notices}`;
+  $('#notice').hidden = !notices.length;
 
   const att = attendance.checked_out_today ? 'Completed today' : attendance.checked_in_today ? 'Checked in' : 'Not checked in';
   const shift = data.shift;
   const lateToday = attendance.late_minutes_today ? ` · ${attendance.late_minutes_today} min late` : '';
-  const pendingTotal = requests.pending_leaves + requests.pending_wfh + requests.pending_documents + (requests.pending_overtime || 0);
+  const pendingTotal = requests.pending_leaves + requests.pending_wfh + requests.pending_documents + (requests.pending_overtime || 0) + (requests.pending_corrections || 0);
   $('#stats').innerHTML = html`
     <a class="card stat" href="employee-payslips.html"><span class="stat-icon green">${icon('wallet')}</span><div><div class="stat-label">${slip ? `Net pay · ${fmt.months[slip.month - 1]}` : 'Latest net pay'}</div><div class="stat-value">${slip ? fmt.compactMoney(slip.net_salary) : '—'}</div><div class="stat-note">${slip ? fmt.money(slip.net_salary, { decimals: 0 }) : 'No payslip yet'}</div></div></a>
     <a class="card stat" href="employee-attendance.html"><span class="stat-icon blue">${icon('pin')}</span><div><div class="stat-label">Today</div><div class="stat-value" style="font-size:20px">${att}</div><div class="stat-note">${shift ? `${shift.name} ${shift.start_time.slice(0, 5)}–${shift.end_time.slice(0, 5)}` : 'No shift'}${lateToday} · ${attendance.days_present_this_month} present, ${attendance.late_days_this_month} late this month</div></div></a>
-    <a class="card stat" href="employee-leave.html"><span class="stat-icon amber">${icon('clock')}</span><div><div class="stat-label">Pending requests</div><div class="stat-value">${pendingTotal}</div><div class="stat-note">${requests.pending_leaves} leave · ${requests.pending_wfh} WFH · ${requests.pending_documents} docs</div></div></a>
+    <a class="card stat" href="employee-leave.html"><span class="stat-icon amber">${icon('clock')}</span><div><div class="stat-label">Pending requests</div><div class="stat-value">${pendingTotal}</div><div class="stat-note">${requests.pending_leaves} leave · ${requests.pending_wfh} WFH · ${requests.pending_documents} docs · ${requests.pending_corrections || 0} corrections</div></div></a>
     <a class="card stat" href="employee-profile.html"><span class="stat-icon">${icon('briefcase')}</span><div><div class="stat-label">${employee ? employee.designation : 'Employee'}</div><div class="stat-value" style="font-size:20px">${employee ? employee.employee_id : '—'}</div><div class="stat-note">${employee ? employee.department : 'Record pending'}</div></div></a>`;
 
   App.barChart($('#trend'), data.salary_trend.map(i => ({ label: i.label, value: i.net })), { label: 'Net salary by month' });

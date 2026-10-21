@@ -10,19 +10,23 @@
   const data = await App.guard($('#stats'), () => App.api.get('/dashboard/admin/'));
   if (!data) return;
   const { employees, pending, attendance, payroll } = data;
-  const pendingTotal = pending.leaves + pending.wfh + pending.documents + (pending.overtime || 0);
+  const pendingTotal = pending.leaves + pending.wfh + pending.documents + (pending.overtime || 0) + (pending.corrections || 0);
 
   $('#stats').innerHTML = html`
     <a class="card stat" href="employee-management.html"><span class="stat-icon">${icon('users')}</span><div><div class="stat-label">Active employees</div><div class="stat-value">${employees.active}</div><div class="stat-note">${employees.joined_this_month} joined this month</div></div></a>
     <a class="card stat" href="admin-payroll.html"><span class="stat-icon green">${icon('wallet')}</span><div><div class="stat-label">${payroll.latest ? `Net payroll · ${payroll.latest.label}` : 'Net payroll'}</div><div class="stat-value">${payroll.latest ? fmt.compactMoney(payroll.latest.net) : '—'}</div><div class="stat-note">${payroll.latest ? `${payroll.latest.count} payslips${payroll.latest.drafts ? `, ${payroll.latest.drafts} draft` : ''}` : 'No payroll run yet'}</div></div></a>
-    <a class="card stat" href="admin-leave.html"><span class="stat-icon amber">${icon('clock')}</span><div><div class="stat-label">Pending approvals</div><div class="stat-value">${pendingTotal}</div><div class="stat-note">${pending.leaves} leave · ${pending.wfh} WFH · ${pending.documents} docs · ${pending.overtime || 0} overtime</div></div></a>
+    <a class="card stat" href="admin-leave.html"><span class="stat-icon amber">${icon('clock')}</span><div><div class="stat-label">Pending approvals</div><div class="stat-value">${pendingTotal}</div><div class="stat-note">${pending.leaves} leave · ${pending.wfh} WFH · ${pending.documents} docs · ${pending.overtime || 0} overtime · ${pending.corrections || 0} corrections</div></div></a>
     <a class="card stat" href="admin-attendance.html"><span class="stat-icon blue">${icon('pin')}</span><div><div class="stat-label">Checked in today</div><div class="stat-value">${attendance.checked_in_today}<span class="muted" style="font-size:15px;font-weight:500"> / ${employees.active}</span></div><div class="stat-note">${attendance.late_today} late · ${attendance.on_leave_today} on leave · ${attendance.working_from_home_today} remote</div></div></a>`;
 
   const alerts = [];
   if (employees.pending_onboarding) alerts.push(['users', `${employees.pending_onboarding} registered account${employees.pending_onboarding === 1 ? ' is' : 's are'} waiting for an employee record.`, 'employee-management.html', 'Onboard']);
   if (payroll.employees_without_structure) alerts.push(['rupee', `${payroll.employees_without_structure} active employee${payroll.employees_without_structure === 1 ? ' has' : 's have'} no salary structure and will be skipped in payroll.`, 'admin-salary.html', 'Set up salaries']);
   if (pending.overtime) alerts.push(['timer', `${pending.overtime} overtime record${pending.overtime === 1 ? '' : 's'} waiting for approval (unapproved overtime is not paid).`, 'overtime.html', 'Review']);
-  if (payroll.latest && payroll.latest.drafts) alerts.push(['wallet', `${payroll.latest.drafts} draft payslip${payroll.latest.drafts === 1 ? '' : 's'} for ${payroll.latest.label} still need to be finalised.`, 'admin-payroll.html', 'Review']);
+  if (payroll.latest && payroll.latest.drafts) alerts.push(['wallet', `${payroll.latest.drafts} draft payslip${payroll.latest.drafts === 1 ? '' : 's'} for ${payroll.latest.label} still need a variance review and finalising.`, `admin-payroll-review.html?year=${payroll.latest.year}&month=${payroll.latest.month}`, 'Review']);
+  if (pending.corrections) alerts.push(['edit', `${pending.corrections} attendance correction request${pending.corrections === 1 ? '' : 's'} waiting for a decision.`, 'admin-corrections.html', 'Review']);
+  if (employees.onboarding_ready) alerts.push(['checkCircle', `${employees.onboarding_ready} new employee${employees.onboarding_ready === 1 ? ' has' : 's have'} completed every onboarding item and need${employees.onboarding_ready === 1 ? 's' : ''} your review.`, 'admin-onboarding.html?state=READY', 'Review']);
+  const docs = data.documents || {};
+  if (docs.expired || docs.expiring) alerts.push(['file', `${docs.expired || 0} document${docs.expired === 1 ? ' has' : 's have'} expired and ${docs.expiring || 0} expire${docs.expiring === 1 ? 's' : ''} soon.`, `admin-documents.html?expiry=${docs.expired ? 'EXPIRED' : 'EXPIRING'}`, 'View']);
   $('#attention').innerHTML = html`${alerts.map(([iconName, text, href, label]) => html`<div class="alert alert-warning">${icon(iconName)}<span style="flex:1">${text}</span><a href="${href}"><strong>${label}</strong></a></div>`)}`;
 
   App.barChart($('#trendChart'), payroll.trend.map(item => ({ label: item.label, value: item.net })), { label: 'Net payroll by month' });

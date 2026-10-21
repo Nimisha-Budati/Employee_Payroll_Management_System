@@ -50,7 +50,7 @@
       const dist = v => (v == null ? '—' : `${v} m`);
       rows.innerHTML = data.results.length ? html`${data.results.map(r => html`<tr>
         <td><div class="cell-main">${r.employee_name}</div><div class="cell-sub mono">${r.employee_code || r.employee_username}</div></td>
-        <td class="nowrap">${fmt.date(r.date)}</td><td>${r.shift_name || html`<span class="muted">No shift</span>`}${r.scheduled_start ? html`<div class="cell-sub">starts ${fmt.time(r.scheduled_start)}</div>` : ''}</td>
+        <td class="nowrap">${fmt.date(r.date)}${r.is_corrected ? html`<div>${App.badge('CORRECTED')}</div>` : ''}</td><td>${r.shift_name || html`<span class="muted">No shift</span>`}${r.scheduled_start ? html`<div class="cell-sub">starts ${fmt.time(r.scheduled_start)}</div>` : ''}</td>
         <td>${fmt.time(r.check_in_at)}</td><td class="right">${lateCell(r.late_minutes)}</td><td>${r.check_out_at ? fmt.time(r.check_out_at) : '—'}</td>
         <td class="right num">${r.worked_minutes == null ? '—' : fmt.duration(r.worked_minutes)}</td>
         <td class="right num">${dist(r.check_in_distance_meters)} / ${dist(r.check_out_distance_meters)}</td><td>${App.badge(r.status)}</td></tr>`)}`

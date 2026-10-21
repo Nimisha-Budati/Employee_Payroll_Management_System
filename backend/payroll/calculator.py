@@ -71,18 +71,27 @@ def _expand(ranges, start, end):
     return days
 
 
-def attendance_summary(user, joining_date, year, month, lop_mode='ATTENDANCE'):
-    """Return (working_days, lop_days, overtime_hours) for one employee and month."""
+def attendance_detail(user, joining_date, year, month, lop_mode='ATTENDANCE'):
+    """The day sets behind loss of pay: working, covered, unpaid leave, absent and before-joining days."""
     start, end = month_bounds(year, month)
     working = working_dates(year, month)
+    covered, unpaid_leave, payable = _covered_days(user, joining_date, start, end, working, lop_mode)
+    return {
+        'working': working,
+        'covered': covered,
+        'before_joining': working - payable,
+        'unpaid_leave': unpaid_leave & payable,
+        'absent': payable - covered - unpaid_leave,
+    }
 
+
+def _covered_days(user, joining_date, start, end, working, lop_mode):
     unpaid_leave = _expand(
         LeaveRequest.objects.filter(
             unpaid_leave_filter(), employee=user, status='APPROVED', start_date__lte=end, end_date__gte=start,
         ).values_list('start_date', 'end_date'),
         start, end,
     )
-
     payable = {day for day in working if joining_date is None or day >= joining_date}
     if lop_mode == 'NONE':
         covered = set(payable)
@@ -106,6 +115,14 @@ def attendance_summary(user, joining_date, year, month, lop_mode='ATTENDANCE'):
         )
         covered = (present | paid_leave | wfh) & payable
     covered -= unpaid_leave
+    return covered, unpaid_leave, payable
+
+
+def attendance_summary(user, joining_date, year, month, lop_mode='ATTENDANCE'):
+    """Return (working_days, lop_days, overtime_hours) for one employee and month."""
+    start, end = month_bounds(year, month)
+    working = working_dates(year, month)
+    covered, _, _ = _covered_days(user, joining_date, start, end, working, lop_mode)
 
     lop_days = Decimal(len(working) - len(covered))
 
