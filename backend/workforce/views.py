@@ -12,7 +12,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from accounts.audit import record_audit
-from accounts.models import AttendanceRecord
+from accounts.models import AttendanceRecord, UserProfile
 from accounts.notifications import notify_admins, notify_user
 from accounts.pagination import StandardPagination, maybe_paginate
 from accounts.permissions import IsAdminUserRole
@@ -27,6 +27,10 @@ from .services import attendance_overtime, default_rate, month_bounds, payroll_l
 
 ADMIN = [IsAuthenticated, IsAdminUserRole]
 ACTIVE_OVERTIME = (OvertimeRecord.PENDING, OvertimeRecord.APPROVED, OvertimeRecord.REJECTED)
+
+
+def _company_id(user):
+    return UserProfile.objects.filter(user=user).values_list('company_id', flat=True).first()
 
 
 def _int(value):
@@ -45,9 +49,10 @@ def _shift_label(shift):
 @api_view(['GET', 'POST'])
 @permission_classes(ADMIN)
 def shift_list_create(request):
-    context = {'today': timezone.localdate()}
+    company_id = _company_id(request.user)
+    context = {'today': timezone.localdate(), 'company_id': company_id}
     if request.method == 'GET':
-        shifts = Shift.objects.all()
+        shifts = Shift.objects.filter(company_id=company_id)
         if request.query_params.get('active') == 'true':
             shifts = shifts.filter(is_active=True)
         return Response(ShiftSerializer(shifts, many=True, context=context).data)
@@ -57,8 +62,8 @@ def shift_list_create(request):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     with transaction.atomic():
         if serializer.validated_data.get('is_default'):
-            Shift.objects.filter(is_default=True).update(is_default=False)
-        shift = serializer.save()
+            Shift.objects.filter(company_id=company_id, is_default=True).update(is_default=False)
+        shift = serializer.save(company_id=company_id)
         record_audit(request, 'CREATE', 'Shift', shift.pk, f'Created shift {_shift_label(shift)}.')
     return Response(ShiftSerializer(shift, context=context).data, status=status.HTTP_201_CREATED)
 
@@ -66,8 +71,9 @@ def shift_list_create(request):
 @api_view(['GET', 'PUT', 'PATCH', 'DELETE'])
 @permission_classes(ADMIN)
 def shift_detail(request, pk):
-    context = {'today': timezone.localdate()}
-    shift = Shift.objects.filter(pk=pk).first()
+    company_id = _company_id(request.user)
+    context = {'today': timezone.localdate(), 'company_id': company_id}
+    shift = Shift.objects.filter(pk=pk, company_id=company_id).first()
     if shift is None:
         return Response({'detail': 'Shift not found.'}, status=status.HTTP_404_NOT_FOUND)
     if request.method == 'GET':
@@ -88,7 +94,7 @@ def shift_detail(request, pk):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     with transaction.atomic():
         if serializer.validated_data.get('is_default'):
-            Shift.objects.exclude(pk=shift.pk).filter(is_default=True).update(is_default=False)
+            Shift.objects.exclude(pk=shift.pk).filter(company_id=company_id, is_default=True).update(is_default=False)
         if serializer.validated_data.get('is_active') is False:
             serializer.validated_data['is_default'] = False
         shift = serializer.save()
@@ -98,15 +104,15 @@ def shift_detail(request, pk):
 
 # --- Shift assignments (employee shift records) -------------------------------
 
-def _assignment_queryset():
-    return ShiftAssignment.objects.select_related('shift', 'employee', 'employee__employee')
+def _assignment_queryset(company_id=None):
+    return ShiftAssignment.objects.select_related('shift', 'employee', 'employee__employee').filter(employee__userprofile__company_id=company_id)
 
 
 @api_view(['GET', 'POST'])
 @permission_classes(ADMIN)
 def assignment_list_create(request):
     if request.method == 'GET':
-        assignments = _assignment_queryset()
+        assignments = _assignment_queryset(_company_id(request.user))
         params = request.query_params
         if _int(params.get('employee')):
             assignments = assignments.filter(employee_id=_int(params['employee']))
@@ -129,15 +135,18 @@ def assignment_list_create(request):
     if not isinstance(raw_ids, list) or not raw_ids:
         return Response({'employee_ids': ['Choose at least one employee.']}, status=status.HTTP_400_BAD_REQUEST)
     ids = {value for value in (_int(item) for item in raw_ids) if value}
-    employees = list(User.objects.filter(pk__in=ids, userprofile__role='EMPLOYEE', is_active=True))
+    company_id = _company_id(request.user)
+    employees = list(User.objects.filter(pk__in=ids, userprofile__role='EMPLOYEE', userprofile__company_id=company_id, is_active=True))
     if len(employees) != len(ids):
         return Response({'employee_ids': ['One or more employees were not found or are inactive.']}, status=status.HTTP_400_BAD_REQUEST)
 
-    serializer = ShiftAssignmentSerializer(data=data)
+    serializer = ShiftAssignmentSerializer(data=data, context={'company_id': company_id})
     if not serializer.is_valid():
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     values = serializer.validated_data
     start, end, shift = values['start_date'], values.get('end_date'), values['shift']
+    if shift.company_id != company_id:
+        return Response({'shift_id': ['Choose a shift belonging to your company.']}, status=status.HTTP_400_BAD_REQUEST)
     replace = bool(data.get('replace'))
 
     created = []
@@ -175,7 +184,8 @@ def assignment_list_create(request):
 @api_view(['PUT', 'DELETE'])
 @permission_classes(ADMIN)
 def assignment_detail(request, pk):
-    assignment = _assignment_queryset().filter(pk=pk).first()
+    company_id = _company_id(request.user)
+    assignment = _assignment_queryset(company_id).filter(pk=pk).first()
     if assignment is None:
         return Response({'detail': 'Shift assignment not found.'}, status=status.HTTP_404_NOT_FOUND)
     if request.method == 'DELETE':
@@ -184,7 +194,7 @@ def assignment_detail(request, pk):
         record_audit(request, 'DELETE', 'ShiftAssignment', pk, summary)
         return Response(status=status.HTTP_204_NO_CONTENT)
 
-    serializer = ShiftAssignmentSerializer(assignment, data=request.data, partial=True)
+    serializer = ShiftAssignmentSerializer(assignment, data=request.data, partial=True, context={'company_id': company_id})
     if not serializer.is_valid():
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     start = serializer.validated_data.get('start_date', assignment.start_date)
@@ -205,7 +215,7 @@ def assignment_detail(request, pk):
 def my_shift(request):
     today = timezone.localdate()
     shift = shift_for(request.user, today)
-    assignments = _assignment_queryset().filter(employee=request.user)[:20]
+    assignments = _assignment_queryset(_company_id(request.user)).filter(employee=request.user)[:20]
     today_assignment = next((item for item in assignments if item.covers(today)), None)
     return Response({
         'date': today,
@@ -217,12 +227,12 @@ def my_shift(request):
 
 # --- Overtime ---------------------------------------------------------------
 
-def _overtime_queryset():
-    return OvertimeRecord.objects.select_related('employee', 'employee__employee', 'reviewed_by')
+def _overtime_queryset(company_id=None):
+    return OvertimeRecord.objects.select_related('employee', 'employee__employee', 'reviewed_by').filter(employee__userprofile__company_id=company_id)
 
 
 def _filtered_overtime(request):
-    records = _overtime_queryset()
+    records = _overtime_queryset(_company_id(request.user))
     admin = is_admin_user(request.user)
     if not admin:
         records = records.filter(employee=request.user)
@@ -271,7 +281,7 @@ def overtime_list_create(request):
             return response
         return Response({'results': OvertimeRecordSerializer(records, many=True).data, 'totals': totals})
 
-    serializer = OvertimeCreateSerializer(data=request.data)
+    serializer = OvertimeCreateSerializer(data=request.data, context={'company_id': _company_id(request.user)})
     if not serializer.is_valid():
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     data = serializer.validated_data
@@ -316,7 +326,7 @@ def overtime_list_create(request):
 @permission_classes([IsAuthenticated])
 def overtime_detail(request, pk):
     admin = is_admin_user(request.user)
-    record = _overtime_queryset().filter(pk=pk).first()
+    record = _overtime_queryset(_company_id(request.user)).filter(pk=pk).first()
     if record is None or not (admin or record.employee_id == request.user.pk):
         return Response({'detail': 'Overtime record not found.'}, status=status.HTTP_404_NOT_FOUND)
     if record.status != OvertimeRecord.PENDING:
@@ -358,7 +368,7 @@ def overtime_review(request, pk):
     if new_status == OvertimeRecord.REJECTED and not note:
         return Response({'detail': 'A reason is required when rejecting overtime.'}, status=status.HTTP_400_BAD_REQUEST)
     with transaction.atomic():
-        record = OvertimeRecord.objects.select_for_update().select_related('employee').filter(pk=pk).first()
+        record = _overtime_queryset(_company_id(request.user)).select_for_update(of=('self',)).filter(pk=pk).first()
         if record is None:
             return Response({'detail': 'Overtime record not found.'}, status=status.HTTP_404_NOT_FOUND)
         if record.status != OvertimeRecord.PENDING:
@@ -375,7 +385,7 @@ def overtime_review(request, pk):
     notify_user(record.employee, 'OVERTIME', f'Overtime {decision}',
                 f'Your {record.hours} h of overtime on {record.date:%d %b %Y} was {decision}.{f" Note: {note}" if note else ""}',
                 'overtime.html', actor=request.user)
-    return Response(OvertimeRecordSerializer(_overtime_queryset().get(pk=pk)).data)
+    return Response(OvertimeRecordSerializer(_overtime_queryset(_company_id(request.user)).get(pk=pk)).data)
 
 
 def _quarter_hours(hours):
@@ -396,9 +406,9 @@ def overtime_generate(request):
 
     records = AttendanceRecord.objects.select_related('employee', 'shift').filter(
         date__range=(start, end), check_in_at__isnull=False, check_out_at__isnull=False,
-        employee__is_active=True, employee__userprofile__role='EMPLOYEE',
+        employee__is_active=True, employee__userprofile__role='EMPLOYEE', employee__userprofile__company_id=_company_id(request.user),
     )
-    existing = set(OvertimeRecord.objects.filter(date__range=(start, end), status__in=ACTIVE_OVERTIME)
+    existing = set(OvertimeRecord.objects.filter(employee__userprofile__company_id=_company_id(request.user), date__range=(start, end), status__in=ACTIVE_OVERTIME)
                    .values_list('employee_id', 'date'))
     created = skipped_locked = 0
     with transaction.atomic():

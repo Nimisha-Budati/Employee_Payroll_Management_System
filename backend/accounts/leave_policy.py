@@ -21,8 +21,12 @@ from django.db.models import Q, Sum
 from .models import EmployeeLeaveBalance, LeavePolicySettings, LeaveRequest, LeaveType
 
 
-def policy_settings():
-    return LeavePolicySettings.load()
+def company_for_user(user):
+    return getattr(getattr(user, 'userprofile', None), 'company', None)
+
+
+def policy_settings(company=None):
+    return LeavePolicySettings.load(company)
 
 
 def leave_year_bounds(year, settings_row=None):
@@ -43,17 +47,17 @@ def leave_year_label(year, settings_row=None):
     return str(year) if start.month == 1 else f'{start:%d %b %Y} – {end:%d %b %Y}'
 
 
-def resolve_leave_type(value):
+def resolve_leave_type(value, company=None):
     """Find a configured leave type from an id or a name (case-insensitive; "casual" matches "Casual Leave")."""
     if isinstance(value, LeaveType):
         return value
     if isinstance(value, int) or (isinstance(value, str) and value.strip().isdigit()):
-        return LeaveType.objects.filter(pk=int(value)).first()
+        return LeaveType.objects.filter(pk=int(value), company=company).first()
     if not isinstance(value, str) or not value.strip():
         return None
     name = ' '.join(value.split())
-    return (LeaveType.objects.filter(name__iexact=name).first()
-            or LeaveType.objects.filter(name__iexact=f'{name} leave').first())
+    return (LeaveType.objects.filter(name__iexact=name, company=company).first()
+            or LeaveType.objects.filter(name__iexact=f'{name} leave', company=company).first())
 
 
 def _days_by_type(user, start, end, status):
@@ -64,13 +68,14 @@ def _days_by_type(user, start, end, status):
 
 def leave_balance_for(user, year):
     """{leave type name: balance dict} for the leave year ``year``, from the configured policy and real requests."""
-    settings_row = policy_settings()
+    company = company_for_user(user)
+    settings_row = policy_settings(company)
     start, end = leave_year_bounds(year, settings_row)
     approved = _days_by_type(user, start, end, 'APPROVED')
     pending = _days_by_type(user, start, end, 'PENDING')
     extras = {row.leave_type_id: row for row in EmployeeLeaveBalance.objects.filter(employee=user, year=year)}
     used_ids = set(approved) | set(pending)
-    types = LeaveType.objects.filter(Q(is_active=True) | Q(pk__in=used_ids))
+    types = LeaveType.objects.filter(company=company).filter(Q(is_active=True) | Q(pk__in=used_ids))
     balance = {}
     for leave_type in types:
         extra = extras.get(leave_type.pk)
@@ -102,9 +107,10 @@ def leave_balance_for(user, year):
     return balance
 
 
-def unpaid_leave_filter():
+def unpaid_leave_filter(user=None):
     """Q for approved-leave rows that are unpaid (loss of pay) under the current policy."""
-    unpaid_names = list(LeaveType.objects.filter(is_paid=False).values_list('name', flat=True))
+    company = company_for_user(user) if user is not None else None
+    unpaid_names = list(LeaveType.objects.filter(is_paid=False, company=company).values_list('name', flat=True))
     return Q(policy__is_paid=False) | Q(policy__isnull=True, leave_type__in=unpaid_names)
 
 
@@ -117,7 +123,10 @@ def carry_forward(year, actor=None, employees=None):
     """
     from django.contrib.auth.models import User
 
-    types = list(LeaveType.objects.filter(allow_carry_forward=True, annual_days__isnull=False))
+    company = None
+    if actor is not None:
+        company = company_for_user(actor)
+    types = list(LeaveType.objects.filter(company=company, allow_carry_forward=True, annual_days__isnull=False))
     if employees is None:
         employees = User.objects.filter(userprofile__role='EMPLOYEE', employee__isnull=False)
     written = 0

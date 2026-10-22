@@ -70,12 +70,13 @@ def team_calendar(request):
     types = [item for item in requested if item in TYPES] or list(TYPES)
 
     admin = is_admin_user(request.user)
+    company_id = request.user.userprofile.company_id
     events = []
     me = request.user
-    my_employee = Employee.objects.filter(user=me).first()
+    my_employee = Employee.objects.filter(user=me, company_id=company_id).first()
 
     if admin:
-        people = Employee.objects.filter(status='ACTIVE', user__is_active=True).select_related('user')
+        people = Employee.objects.filter(company_id=company_id, status='ACTIVE', user__is_active=True).select_related('user')
         if params.get('department'):
             people = people.filter(department__iexact=params['department'])
         if params.get('employee'):
@@ -86,7 +87,7 @@ def team_calendar(request):
         if my_employee is None:
             people = Employee.objects.none()
         elif scope == 'team':
-            people = Employee.objects.filter(status='ACTIVE', user__is_active=True, department__iexact=my_employee.department).select_related('user')
+            people = Employee.objects.filter(company_id=company_id, status='ACTIVE', user__is_active=True, department__iexact=my_employee.department).select_related('user')
         else:
             people = Employee.objects.filter(pk=my_employee.pk).select_related('user')
     people = list(people.order_by('employee_id'))
@@ -144,7 +145,7 @@ def team_calendar(request):
                     'title': _shift_label(item['shift']), 'detail': 'Your shift',
                 })
     if 'holiday' in types:
-        for holiday in Holiday.objects.filter(date__range=(start, end)).order_by('date'):
+        for holiday in Holiday.objects.filter(company_id=company_id, date__range=(start, end)).order_by('date'):
             events.append({
                 'type': 'holiday', 'start': holiday.date, 'end': holiday.date, 'employee_user_id': None,
                 'employee_name': '', 'department': '', 'title': holiday.name,
@@ -159,7 +160,7 @@ def team_calendar(request):
     if admin and 'shift' in types:
         from workforce.models import Shift
 
-        default = Shift.objects.filter(is_default=True, is_active=True).first()
+        default = Shift.objects.filter(company_id=company_id, is_default=True, is_active=True).first()
         response['default_shift'] = _shift_label(default) if default else None
     if not admin and my_employee is not None:
         response['department'] = my_employee.department

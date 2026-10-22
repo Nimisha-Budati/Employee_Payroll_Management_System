@@ -77,12 +77,12 @@ TOPICS_FOR_INTENT = {
 
 # --- attendance statistics ------------------------------------------------------
 
-def working_set(start, end):
+def working_set(start, end, company=None):
     """Working days (weekdays that are not holidays) between two dates, inclusive."""
     days = set()
     current = start.replace(day=1)
     while current <= end:
-        days |= working_dates(current.year, current.month)
+        days |= working_dates(current.year, current.month, company)
         current = (current.replace(day=28) + timedelta(days=4)).replace(day=1)
     return {day for day in days if start <= day <= end}
 
@@ -92,7 +92,8 @@ def attendance_stats(user, start, end):
     today = timezone.localdate()
     end = min(end, today)
     employee = Employee.objects.filter(user=user).first()
-    working = {day for day in working_set(start, end) if employee is None or day >= employee.joining_date}
+    company = getattr(getattr(user, 'userprofile', None), 'company', None)
+    working = {day for day in working_set(start, end, company) if employee is None or day >= employee.joining_date}
 
     records = list(AttendanceRecord.objects.select_related('employee', 'shift').filter(
         employee=user, date__range=(start, end), check_in_at__isnull=False).order_by('date'))
@@ -153,10 +154,10 @@ def attendance_stats(user, start, end):
     }
 
 
-def company_attendance_stats(start, end):
+def company_attendance_stats(start, end, company_id=None):
     today = timezone.localdate()
     end = min(end, today)
-    records = AttendanceRecord.objects.filter(date__range=(start, end), check_in_at__isnull=False)
+    records = AttendanceRecord.objects.filter(employee__userprofile__company_id=company_id, date__range=(start, end), check_in_at__isnull=False)
     from django.db.models import Avg, Count, Sum
     departments = list(records.values('employee__employee__department').annotate(
         employees=Count('employee', distinct=True), records=Count('id'), late=Count('id', filter=Q(late_minutes__gt=0)),
@@ -165,8 +166,9 @@ def company_attendance_stats(start, end):
     top_late = list(records.filter(late_minutes__gt=0).values('employee__username', 'employee__first_name', 'employee__last_name')
                     .annotate(late=Count('id'), minutes=Sum('late_minutes')).order_by('-minutes')[:5])
     by_weekday = Counter(WEEKDAYS[day.weekday()] for day in records.filter(late_minutes__gt=0).values_list('date', flat=True))
-    active = Employee.objects.filter(status='ACTIVE').count()
-    working = len(working_set(start, end))
+    active = Employee.objects.filter(company_id=company_id, status='ACTIVE').count()
+    from accounts.models import Company
+    working = len(working_set(start, end, Company.objects.filter(pk=company_id).first()))
     return {
         'period_start': start, 'period_end': end, 'active_employees': active, 'working_days': working,
         'check_ins': records.count(), 'late_check_ins': records.filter(late_minutes__gt=0).count(),
@@ -206,7 +208,7 @@ def attendance_context(conversation):
     rules = """Attendance rules: late minutes are counted from the shift start once the grace period is exceeded (n/a when no shift applies).
 Absent days are working days with no check-in, approved leave or approved WFH. Unapproved overtime is time beyond the standard day that has not been approved and is not paid."""
     if conversation.scope == 'COMPANY':
-        stats = company_attendance_stats(start, end)
+        stats = company_attendance_stats(start, end, conversation.user.userprofile.company_id)
         subject = 'the whole company'
     else:
         person = conversation.subject or conversation.user
@@ -224,7 +226,7 @@ def build_prompt(conversation, question, retrieval):
         forced.add('company_overview')
     if 'leave' in retrieval.intents or conversation.feature == AIConversation.LEAVE:
         forced.add('leave_policy')
-    topics, _ = knowledge.retrieve(f'{question} {" ".join(sorted(retrieval.intents))}', limit=3, always=tuple(forced))
+    topics, _ = knowledge.retrieve(f'{question} {" ".join(sorted(retrieval.intents))}', limit=3, always=tuple(forced), company=conversation.user.userprofile.company)
     parts = [base_rules(conversation.user), FEATURE_FOCUS[conversation.feature], 'CONTEXT START']
     knowledge_text = knowledge.render(topics) or 'No matching documentation was found for this question.'
     parts.append(f'VERIFIED KNOWLEDGE:\n{knowledge_text}')

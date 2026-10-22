@@ -29,7 +29,7 @@ def _item(key, label, owner, done, state, hint=''):
 
 
 def checklist(employee, settings=None, today=None):
-    settings = settings or OnboardingSettings.load()
+    settings = settings or OnboardingSettings.load(employee.company)
     today = today or timezone.localdate()
     user = employee.user
     profile = UserProfile.objects.filter(user=user).first()
@@ -137,16 +137,17 @@ class OnboardingSettingsSerializer(serializers.ModelSerializer):
         return sorted(set(value))
 
 
-def _employees():
-    return Employee.objects.select_related('user', 'onboarding_completed_by')
+def _employees(company_id=None):
+    return Employee.objects.select_related('user', 'onboarding_completed_by').filter(company_id=company_id)
 
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated, IsAdminUserRole])
 def onboarding_list(request):
     params = request.query_params
-    settings = OnboardingSettings.load()
-    employees = _employees().order_by('-joining_date', 'employee_id')
+    company_id = request.user.userprofile.company_id
+    settings = OnboardingSettings.load(request.user.userprofile.company)
+    employees = _employees(company_id).order_by('-joining_date', 'employee_id')
     if params.get('include_inactive') != 'true':
         employees = employees.filter(status='ACTIVE', user__is_active=True)
     if params.get('department'):
@@ -170,7 +171,7 @@ def onboarding_list(request):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def onboarding_me(request):
-    employee = _employees().filter(user=request.user).first()
+    employee = _employees(request.user.userprofile.company_id).filter(user=request.user).first()
     if employee is None:
         return Response({'detail': 'You do not have an employee record yet.'}, status=status.HTTP_404_NOT_FOUND)
     data = summary(employee)
@@ -181,7 +182,8 @@ def onboarding_me(request):
 @api_view(['GET', 'PUT'])
 @permission_classes([IsAuthenticated, IsAdminUserRole])
 def onboarding_settings(request):
-    settings = OnboardingSettings.load()
+    company_id = request.user.userprofile.company_id
+    settings = OnboardingSettings.load(request.user.userprofile.company)
     if request.method == 'GET':
         return Response(OnboardingSettingsSerializer(settings).data)
     serializer = OnboardingSettingsSerializer(settings, data=request.data, partial=True)
@@ -193,13 +195,13 @@ def onboarding_settings(request):
                  f'Onboarding requires {labels}; address {"required" if settings.require_address else "optional"}, '
                  f'photo {"required" if settings.require_profile_photo else "optional"}, salary structure '
                  f'{"required" if settings.require_salary_structure else "optional"}.')
-    for employee in _employees().filter(onboarding_status=Employee.ONBOARDING_PENDING):
+    for employee in _employees(company_id).filter(onboarding_status=Employee.ONBOARDING_PENDING):
         refresh(employee, settings)
     return Response(OnboardingSettingsSerializer(settings).data)
 
 
-def _get(pk):
-    return _employees().filter(pk=pk).first()
+def _get(pk, company_id):
+    return _employees(company_id).filter(pk=pk).first()
 
 
 @api_view(['POST'])
@@ -207,17 +209,17 @@ def _get(pk):
 def onboarding_complete(request, pk):
     note = str(request.data.get('note', '')).strip()[:255]
     with transaction.atomic():
-        employee = Employee.objects.select_for_update().filter(pk=pk).first()
+        employee = Employee.objects.select_for_update().filter(pk=pk, company_id=request.user.userprofile.company_id).first()
         if employee is None:
             return Response({'detail': 'Employee not found.'}, status=status.HTTP_404_NOT_FOUND)
         if employee.onboarding_status == Employee.ONBOARDING_COMPLETED:
             return Response({'detail': 'Onboarding is already complete for this employee.'}, status=status.HTTP_409_CONFLICT)
-        employee = _get(pk)
+        employee = _get(pk, request.user.userprofile.company_id)
         missing = [item['label'] for item in checklist(employee) if not item['done']]
         if missing:
             return Response({'detail': f'Onboarding cannot be completed yet. Missing: {", ".join(missing)}.', 'missing': missing},
                             status=status.HTTP_409_CONFLICT)
-        Employee.objects.filter(pk=pk).update(
+        Employee.objects.filter(pk=pk, company_id=request.user.userprofile.company_id).update(
             onboarding_status=Employee.ONBOARDING_COMPLETED, onboarding_completed_at=timezone.now(),
             onboarding_completed_by=request.user, onboarding_note=note,
         )
@@ -226,7 +228,7 @@ def onboarding_complete(request, pk):
     notify_user(employee.user, 'ONBOARDING', 'Onboarding complete',
                 'An administrator reviewed your details and documents and completed your onboarding.',
                 'employee-dashboard.html', actor=request.user)
-    return Response(summary(_get(pk)))
+    return Response(summary(_get(pk, request.user.userprofile.company_id)))
 
 
 @api_view(['POST'])
@@ -235,26 +237,26 @@ def onboarding_reopen(request, pk):
     note = str(request.data.get('note', '')).strip()[:255]
     if not note:
         return Response({'note': ['Say why onboarding is being reopened.']}, status=status.HTTP_400_BAD_REQUEST)
-    employee = _get(pk)
+    employee = _get(pk, request.user.userprofile.company_id)
     if employee is None:
         return Response({'detail': 'Employee not found.'}, status=status.HTTP_404_NOT_FOUND)
     if employee.onboarding_status != Employee.ONBOARDING_COMPLETED:
         return Response({'detail': 'Onboarding is not complete for this employee.'}, status=status.HTTP_409_CONFLICT)
-    Employee.objects.filter(pk=pk).update(
+    Employee.objects.filter(pk=pk, company_id=request.user.userprofile.company_id).update(
         onboarding_status=Employee.ONBOARDING_PENDING, onboarding_completed_at=None, onboarding_completed_by=None,
         onboarding_ready_at=None, onboarding_note=note,
     )
     record_audit(request, 'REOPEN', 'Onboarding', pk, f'Reopened onboarding for {employee.employee_id}: {note}.', subject=employee)
     notify_user(employee.user, 'ONBOARDING', 'Onboarding reopened', f'Please review your onboarding checklist. {note}',
                 'employee-dashboard.html', actor=request.user)
-    refresh(_get(pk))
-    return Response(summary(_get(pk)))
+    refresh(_get(pk, request.user.userprofile.company_id))
+    return Response(summary(_get(pk, request.user.userprofile.company_id)))
 
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated, IsAdminUserRole])
 def onboarding_remind(request, pk):
-    employee = _get(pk)
+    employee = _get(pk, request.user.userprofile.company_id)
     if employee is None:
         return Response({'detail': 'Employee not found.'}, status=status.HTTP_404_NOT_FOUND)
     missing = [item['label'] for item in checklist(employee) if not item['done'] and item['owner'] == 'EMPLOYEE']

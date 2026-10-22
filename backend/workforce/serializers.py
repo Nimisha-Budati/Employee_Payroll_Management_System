@@ -42,6 +42,8 @@ class ShiftSerializer(serializers.ModelSerializer):
         if not value:
             raise serializers.ValidationError('Shift name cannot be blank.')
         queryset = Shift.objects.filter(name__iexact=value)
+        company_id = self.context.get('company_id')
+        queryset = queryset.filter(company_id=company_id)
         if self.instance is not None:
             queryset = queryset.exclude(pk=self.instance.pk)
         if queryset.exists():
@@ -86,6 +88,8 @@ class ShiftAssignmentSerializer(serializers.ModelSerializer):
         return _employee_code(obj.employee)
 
     def validate_shift_id(self, shift):
+        if shift.company_id != self.context.get('company_id'):
+            raise serializers.ValidationError('Choose a shift belonging to your company.')
         if not shift.is_active:
             raise serializers.ValidationError('This shift is inactive.')
         return shift
@@ -152,7 +156,7 @@ class OvertimeCreateSerializer(serializers.Serializer):
         return value
 
     def validate_employee_id(self, value):
-        user = User.objects.filter(pk=value, userprofile__role='EMPLOYEE', is_active=True).first()
+        user = User.objects.filter(pk=value, userprofile__role='EMPLOYEE', userprofile__company_id=self.context.get('company_id'), is_active=True).first()
         if user is None:
             raise serializers.ValidationError('Active employee not found.')
         return user

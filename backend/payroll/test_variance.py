@@ -12,6 +12,7 @@ from django.utils import timezone
 from openpyxl import load_workbook
 from rest_framework.test import APIClient
 
+from accounts.test_utils import test_company
 from accounts.models import AttendanceCorrectionRequest, AttendanceRecord, AuditLog, Employee, LeaveRequest, UserProfile
 from workforce.models import OvertimeRecord
 
@@ -30,7 +31,7 @@ class PayrollCase(TestCase):
     def setUp(self):
         cache.clear()
         self.admin = User.objects.create_user('admin', 'admin@example.com', 'AdminPass123!')
-        UserProfile.objects.create(user=self.admin, role='ADMIN')
+        UserProfile.objects.create(user=self.admin, role='ADMIN', company=test_company())
         self.client = APIClient()
         self.client.force_authenticate(self.admin)
         self.asha = make_employee('asha', 'EMP001', department='Engineering')

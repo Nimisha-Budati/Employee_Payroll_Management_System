@@ -1,5 +1,11 @@
 # PayrollPro – Feature Guide
 
+## Multi-company accounts
+
+Each company registers from the sign-in page and receives an isolated administrator account. The administrator can create employee records or attach unassigned employee accounts created through public self-registration. Employee IDs, leave types, holidays, shifts, payroll reviews, attendance settings, announcements, reminders, and AI knowledge are scoped to their company. Employee-facing records remain private to the employee; administrators see their own company's records.
+
+Company administrators can review and update their company's contact details from the administrator profile page. Existing installations with data receive a `Legacy organization (review ownership)` during migration. An operator should verify that legacy records belong to one organization before inviting a second company. The backfill preserves existing rows and does not infer company ownership. Apply the schema migrations after taking a database backup; migration behavior should first be reviewed against a copy of the production database.
+
 This guide describes every feature of PayrollPro in detail: what it is for, who can use it, how it works step by step, the rules the system enforces, who gets notified, and where to find it (page and API endpoint).
 
 For installation and configuration, see the [README](../README.md).

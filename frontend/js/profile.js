@@ -16,6 +16,31 @@
   }
   try { fill(await api.get('/profile/')); } catch (error) { App.error(error); }
 
+  if (role === 'ADMIN') {
+    const companyForm = $('#companyForm');
+    try {
+      const company = await api.get('/company/');
+      companyForm.elements.name.value = company.name || '';
+      companyForm.elements.email.value = company.email || '';
+      companyForm.elements.phone.value = company.phone || '';
+      companyForm.elements.address.value = company.address || '';
+    } catch (error) { App.error(error); }
+    companyForm.addEventListener('submit', async event => {
+      event.preventDefault();
+      const box = $('#companyError'); box.hidden = true;
+      const button = $('button[type=submit]', companyForm); button.disabled = true;
+      try {
+        const company = await api.put('/company/', Object.fromEntries(new FormData(companyForm)));
+        const header = $('#companyName'); if (header) header.textContent = company.name;
+        App.session.set({ ...App.session.get(), companyName: company.name });
+        App.toast('Company details saved.');
+      } catch (error) { box.textContent = error.message; box.hidden = false; }
+      finally { button.disabled = false; }
+    });
+  } else {
+    $('#companyForm').closest('.card').remove();
+  }
+
   if (role === 'EMPLOYEE') {
     try {
       const { employee } = await api.get('/dashboard/employee/');

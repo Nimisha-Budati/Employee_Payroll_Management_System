@@ -28,6 +28,17 @@
         <div class="span-2"><button class="btn btn-primary" type="submit">Save changes</button></div>
       </form>
     </section>
+    <section class="card">
+      <div class="card-header"><div><h2>Company details</h2><p>Your company workspace details.</p></div></div>
+      <form class="card-body form-grid" id="companyForm" novalidate>
+        <div class="alert alert-danger span-2" id="companyError" hidden></div>
+        <div class="field span-2"><label for="company_name">Company name</label><input class="input" id="company_name" name="name" maxlength="160" required></div>
+        <div class="field span-2"><label for="company_email">Company email</label><input class="input" id="company_email" name="email" type="email" required></div>
+        <div class="field span-2"><label for="company_phone">Contact number</label><input class="input" id="company_phone" name="phone" maxlength="20"></div>
+        <div class="field span-2"><label for="company_address">Address</label><textarea class="textarea" id="company_address" name="address"></textarea></div>
+        <div class="span-2"><button class="btn btn-primary" type="submit">Save company details</button></div>
+      </form>
+    </section>
     <div class="stack">
       <section class="card"><div class="card-body" style="text-align:center">
         <span class="avatar avatar-lg" id="avatar" style="margin:0 auto 12px"></span>

@@ -6,7 +6,7 @@ from django.core.exceptions import ObjectDoesNotExist, ValidationError as Django
 from django.urls import reverse
 from django.utils import timezone
 from rest_framework import serializers
-from .models import ReminderSettings, AuditLog, Announcement, NotificationBroadcast, LeavePolicySettings, LeaveType, AttendanceRecord, AttendanceSettings, ChatConversation, ChatMessage, Employee, EmployeeDocument, Holiday, LeaveRequest, Notification, UserProfile, WorkFromHomeRequest
+from .models import Company, ReminderSettings, AuditLog, Announcement, NotificationBroadcast, LeavePolicySettings, LeaveType, AttendanceRecord, AttendanceSettings, ChatConversation, ChatMessage, Employee, EmployeeDocument, Holiday, LeaveRequest, Notification, UserProfile, WorkFromHomeRequest
 
 
 PHONE_RE = re.compile(r'^[0-9+\-() ]{7,15}$')
@@ -78,7 +78,7 @@ class EmployeeWriteSerializer(serializers.Serializer):
 
     def validate_employee_id(self, value):
         value = validate_employee_code(value)
-        queryset = Employee.objects.filter(employee_id__iexact=value)
+        queryset = Employee.objects.filter(employee_id__iexact=value, company_id=self.context.get('company_id'))
         if self.instance is not None:
             queryset = queryset.exclude(pk=self.instance.pk)
         if queryset.exists():
@@ -133,6 +133,9 @@ class EmployeeWriteSerializer(serializers.Serializer):
                 profile = getattr(user, 'userprofile', None)
                 if profile is None or profile.role != 'EMPLOYEE' or hasattr(user, 'employee'):
                     raise serializers.ValidationError({'user_id': 'This account cannot be onboarded as an employee.'})
+                company_id = self.context.get('company_id')
+                if profile.company_id not in (None, company_id):
+                    raise serializers.ValidationError({'user_id': 'This account belongs to another company.'})
                 data['existing_user'] = user
             else:
                 for field in ('username', 'email', 'password'):
@@ -168,7 +171,7 @@ class LeaveTypeSerializer(serializers.ModelSerializer):
         value = ' '.join(value.split())
         if not value:
             raise serializers.ValidationError('Enter a name for the leave type.')
-        queryset = LeaveType.objects.filter(name__iexact=value)
+        queryset = LeaveType.objects.filter(name__iexact=value, company_id=self.context.get('company_id'))
         if self.instance is not None:
             queryset = queryset.exclude(pk=self.instance.pk)
         if queryset.exists():
@@ -247,7 +250,7 @@ class LeaveRequestSerializer(serializers.ModelSerializer):
         return obj.policy.is_paid if obj.policy_id else None
 
     def validate_leave_type(self, value):
-        leave_type = resolve_leave_type(value)
+        leave_type = resolve_leave_type(value, Company.objects.filter(pk=self.context.get('company_id')).first())
         if leave_type is None:
             raise serializers.ValidationError('Choose one of the leave types configured by your administrator.')
         if not leave_type.is_active:
@@ -267,7 +270,8 @@ class LeaveRequestSerializer(serializers.ModelSerializer):
         if request and request.method == 'POST':
             user = request.user
             leave_type = self._leave_type
-            rules = policy_settings()
+            company = Company.objects.filter(pk=self.context.get('company_id')).first()
+            rules = policy_settings(company)
             requested = (end_date - start_date).days + 1
             today = timezone.localdate()
             if not rules.allow_past_dates and start_date < today:
@@ -287,7 +291,7 @@ class LeaveRequestSerializer(serializers.ModelSerializer):
                 remaining = entry['remaining'] if entry else 0
                 if requested > remaining:
                     pending = entry['pending'] if entry else 0
-                    unpaid = LeaveType.objects.filter(is_active=True, is_paid=False, annual_days__isnull=True).first()
+                    unpaid = LeaveType.objects.filter(company=company, is_active=True, is_paid=False, annual_days__isnull=True).first()
                     hint = f' or apply as "{unpaid.name}" (unpaid leave)' if unpaid else ''
                     raise serializers.ValidationError({
                         'leave_type': f'You asked for {requested} day(s) of {leave_type.name}, but only {remaining} day(s) can be requested '
@@ -334,13 +338,18 @@ class EmployeeDocumentSerializer(serializers.ModelSerializer):
             'review_note', 'expiry_status', 'days_to_expiry', 'uploaded_at', 'updated_at',
         ]
 
-    def _warn_days(self):
-        if 'warn_days' not in self.context:
-            self.context['warn_days'] = ReminderSettings.load().warning_window_days
-        return self.context['warn_days']
+    def _warn_days(self, obj):
+        if 'warn_days' in self.context:
+            return self.context['warn_days']
+        company = getattr(getattr(obj.employee, 'userprofile', None), 'company', None)
+        cache = self.context.setdefault('_warn_days_by_company', {})
+        company_key = getattr(company, 'pk', None)
+        if company_key not in cache:
+            cache[company_key] = ReminderSettings.load(company).warning_window_days
+        return cache[company_key]
 
     def get_expiry_status(self, obj):
-        return obj.expiry_state(warn_days=self._warn_days())
+        return obj.expiry_state(warn_days=self._warn_days(obj))
 
     def get_days_to_expiry(self, obj):
         return (obj.expiry_date - timezone.localdate()).days if obj.expiry_date else None
@@ -381,10 +390,11 @@ class ProfileSerializer(serializers.ModelSerializer):
     email = serializers.EmailField(source='user.email')
     username = serializers.ReadOnlyField(source='user.username')
     profile_photo_url = serializers.SerializerMethodField()
+    company_name = serializers.CharField(source='company.name', read_only=True, allow_null=True)
 
     class Meta:
         model = UserProfile
-        fields = ['username', 'first_name', 'last_name', 'email', 'role', 'phone', 'address', 'profile_photo', 'profile_photo_url']
+        fields = ['username', 'first_name', 'last_name', 'email', 'role', 'phone', 'address', 'profile_photo', 'profile_photo_url', 'company_name']
         read_only_fields = ['username', 'role', 'profile_photo_url']
 
     def get_profile_photo_url(self, obj):

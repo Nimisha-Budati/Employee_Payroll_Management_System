@@ -11,6 +11,7 @@ from django.test import Client, TestCase, override_settings
 
 from accounts import google_auth
 from accounts.models import Employee, GoogleIdentity, UserProfile
+from accounts.test_utils import test_company
 
 FRONTEND = 'http://127.0.0.1:5500'
 CONFIG = dict(
@@ -54,15 +55,15 @@ class GoogleLoginTests(TestCase):
 
     def employee(self, username='asha', email='asha@example.com', with_record=False):
         user = User.objects.create_user(username, email, 'EmployeePass123!')
-        UserProfile.objects.create(user=user, role='EMPLOYEE')
+        UserProfile.objects.create(user=user, role='EMPLOYEE', company=test_company())
         if with_record:
-            Employee.objects.create(user=user, employee_id='EMP1', phone='9876543210', department='Eng',
+            Employee.objects.create(user=user, company=test_company(), employee_id='EMP1', phone='9876543210', department='Eng',
                                     designation='Dev', joining_date='2024-01-01')
         return user
 
     def admin(self):
         user = User.objects.create_user('boss', 'boss@example.com', 'AdminPass123!')
-        UserProfile.objects.create(user=user, role='ADMIN')
+        UserProfile.objects.create(user=user, role='ADMIN', company=test_company())
         return user
 
     def location(self, response):

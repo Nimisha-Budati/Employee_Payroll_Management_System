@@ -7,17 +7,29 @@ Schedule it daily, for example with Windows Task Scheduler:
 from django.core.management.base import BaseCommand
 
 from accounts.reminders import run_reminders
+from accounts.models import Company
 
 
 class Command(BaseCommand):
     help = 'Send due document-expiry, pending-approval and onboarding reminders (each reminder is sent once).'
 
     def handle(self, *args, **options):
-        result = run_reminders()
-        if not result['enabled']:
-            self.stdout.write(self.style.WARNING('Reminders are switched off in Settings.'))
+        companies = Company.objects.all().order_by('pk')
+        if not companies.exists():
+            companies = [None]
+        totals = {'documents': 0, 'pending_digest': 0, 'onboarding': 0}
+        disabled = 0
+        for company in companies:
+            result = run_reminders(company=company)
+            if not result['enabled']:
+                disabled += 1
+                continue
+            for key in totals:
+                totals[key] += result[key]
+        if disabled and not any(totals.values()):
+            self.stdout.write(self.style.WARNING('Reminders are switched off for every company.'))
             return
         self.stdout.write(self.style.SUCCESS(
-            f"Sent {result['documents']} document reminder(s), {result['pending_digest']} pending-approval digest(s) "
-            f"and {result['onboarding']} onboarding reminder(s)."
+            f"Sent {totals['documents']} document reminder(s), {totals['pending_digest']} pending-approval digest(s) "
+            f"and {totals['onboarding']} onboarding reminder(s) across companies."
         ))

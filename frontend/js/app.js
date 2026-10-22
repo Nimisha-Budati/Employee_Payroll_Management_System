@@ -607,7 +607,7 @@
             <div class="user-menu">
               <button class="user-btn" id="userBtn" type="button" aria-haspopup="true" aria-expanded="false">
                 <span class="avatar" id="userAvatar">${fmt.initials(session.fullName || session.username)}</span>
-                <span class="user-meta"><strong class="truncate" id="userName">${session.fullName || session.username}</strong><span>${role === 'ADMIN' ? 'Administrator' : 'Employee'}</span></span>
+                <span class="user-meta"><strong class="truncate" id="userName">${session.fullName || session.username}</strong><span id="companyName">${session.companyName || (role === 'ADMIN' ? 'Administrator' : 'Employee')}</span></span>
                 ${icon('down', 'icon-sm')}
               </button>
               <div class="menu-pop" id="userPop" hidden>
@@ -670,8 +670,9 @@
     }
     if (profile.role !== stored.role) { App.session.clear(); location.replace('index.html'); return new Promise(() => {}); }
     const fullName = `${profile.first_name || ''} ${profile.last_name || ''}`.trim() || profile.username;
-    App.session.set({ username: profile.username, role: profile.role, fullName });
+    App.session.set({ username: profile.username, role: profile.role, fullName, companyName: profile.company_name || '' });
     const name = $('#userName'); if (name) name.textContent = fullName;
+    const companyName = $('#companyName'); if (companyName) companyName.textContent = profile.company_name || (profile.role === 'ADMIN' ? 'Administrator' : 'Employee');
     const avatar = $('#userAvatar');
     if (avatar) {
       if (profile.profile_photo_url) { avatar.textContent = ''; avatar.style.backgroundImage = `url("${profile.profile_photo_url}")`; }

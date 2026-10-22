@@ -41,11 +41,13 @@ def _paragraph(text, style):
 
 
 def render_payslip_pdf(payslip):
+    company = getattr(getattr(payslip.employee, 'userprofile', None), 'company', None)
+    company_name = company.name if company else settings.COMPANY_NAME
     buffer = BytesIO()
     document = SimpleDocTemplate(
         buffer, pagesize=A4, leftMargin=18 * mm, rightMargin=18 * mm, topMargin=16 * mm, bottomMargin=16 * mm,
         title=f'Payslip {payslip.employee_code} {payslip.year}-{payslip.month:02d}',
-        author=settings.COMPANY_NAME,
+        author=company_name,
     )
     base = getSampleStyleSheet()
     small = ParagraphStyle('small', parent=base['Normal'], fontName='Helvetica', fontSize=9, textColor=MUTED, leading=12)
@@ -56,7 +58,7 @@ def render_payslip_pdf(payslip):
 
     period = f'{calendar.month_name[payslip.month]} {payslip.year}'
     story = [
-        _paragraph(settings.COMPANY_NAME, company),
+        _paragraph(company_name, company),
         Spacer(1, 2 * mm),
         _paragraph(f'Payslip - {period}', title),
         Spacer(1, 6 * mm),

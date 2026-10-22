@@ -208,8 +208,8 @@ def _describe_change(correction, record_in, record_out):
     return ', '.join(parts)
 
 
-def _queryset():
-    return Correction.objects.select_related('employee', 'employee__employee', 'reviewed_by', 'attendance')
+def _queryset(company_id=None):
+    return Correction.objects.select_related('employee', 'employee__employee', 'reviewed_by', 'attendance').filter(employee__userprofile__company_id=company_id)
 
 
 @api_view(['GET', 'POST'])
@@ -217,7 +217,7 @@ def _queryset():
 def correction_list_create(request):
     admin = is_admin_user(request.user)
     if request.method == 'GET':
-        items = _queryset()
+        items = _queryset(request.user.userprofile.company_id)
         params = request.query_params
         if not admin:
             items = items.filter(employee=request.user)
@@ -267,14 +267,14 @@ def correction_list_create(request):
         f'{request.user.username} asked to correct attendance for {correction.date:%d %b %Y} ({correction.get_correction_type_display().lower()}).',
         'admin-corrections.html', actor=request.user,
     )
-    return Response(CorrectionSerializer(_queryset().get(pk=correction.pk)).data, status=status.HTTP_201_CREATED)
+    return Response(CorrectionSerializer(_queryset(request.user.userprofile.company_id).get(pk=correction.pk)).data, status=status.HTTP_201_CREATED)
 
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def correction_cancel(request, pk):
     with transaction.atomic():
-        correction = Correction.objects.select_for_update().filter(pk=pk, employee=request.user).first()
+        correction = Correction.objects.select_for_update().filter(pk=pk, employee=request.user, employee__userprofile__company_id=request.user.userprofile.company_id).first()
         if correction is None:
             return Response({'detail': 'Correction request not found.'}, status=status.HTTP_404_NOT_FOUND)
         if correction.status != Correction.PENDING:
@@ -284,7 +284,7 @@ def correction_cancel(request, pk):
     notify_admins('CORRECTION', 'Attendance correction cancelled',
                   f'{request.user.username} cancelled the correction request for {correction.date:%d %b %Y}.',
                   'admin-corrections.html', actor=request.user)
-    return Response(CorrectionSerializer(_queryset().get(pk=pk)).data)
+    return Response(CorrectionSerializer(_queryset(request.user.userprofile.company_id).get(pk=pk)).data)
 
 
 @api_view(['POST'])
@@ -300,7 +300,7 @@ def correction_review(request, pk):
         return Response({'review_note': ['Give a reason for rejecting the request.']}, status=status.HTTP_400_BAD_REQUEST)
 
     with transaction.atomic():
-        correction = Correction.objects.select_for_update().select_related('employee').filter(pk=pk).first()
+        correction = _queryset(request.user.userprofile.company_id).select_for_update(of=('self',)).filter(pk=pk).first()
         if correction is None:
             return Response({'detail': 'Correction request not found.'}, status=status.HTTP_404_NOT_FOUND)
         if correction.status != Correction.PENDING:
@@ -353,4 +353,4 @@ def correction_review(request, pk):
     notify_user(employee, 'CORRECTION', f'Attendance correction {decision.lower()}',
                 f'Your correction for {correction.date:%d %b %Y} was {decision.lower()}.{detail}',
                 'employee-attendance.html', actor=request.user)
-    return Response(CorrectionSerializer(_queryset().get(pk=pk)).data)
+    return Response(CorrectionSerializer(_queryset(request.user.userprofile.company_id).get(pk=pk)).data)

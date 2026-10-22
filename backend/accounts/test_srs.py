@@ -10,6 +10,7 @@ from rest_framework.test import APIClient
 
 from payroll.tests import make_employee
 
+from .test_utils import test_company
 from .models import AuditLog, EmployeeDocument, LeaveRequest, Notification, NotificationBroadcast, UserProfile, WorkFromHomeRequest
 
 
@@ -17,7 +18,7 @@ class SrsTestCase(TestCase):
     def setUp(self):
         cache.clear()
         self.admin = User.objects.create_user('admin', 'admin@example.com', 'AdminPass123!')
-        UserProfile.objects.create(user=self.admin, role='ADMIN')
+        UserProfile.objects.create(user=self.admin, role='ADMIN', company=test_company())
         self.asha = make_employee('asha', 'EMP001', department='Engineering')
         self.ravi = make_employee('ravi', 'EMP002', department='Sales')
         self.meena = make_employee('meena', 'EMP003', department='Sales')

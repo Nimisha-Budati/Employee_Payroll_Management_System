@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f4f8f6">
+  <script src="js/theme.js"></script>
+  <title>Register a company · PayrollPro</title>
+  <link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+<div class="auth">
+  <aside class="auth-aside" aria-hidden="true">
+    <div class="brand"><div class="brand-mark">P</div><div class="brand-name">PayrollPro</div></div>
+    <div><h2>Set up your company workspace.</h2><p>Your company data and administrator access are kept in a separate workspace.</p></div>
+    <small>© PayrollPro</small>
+  </aside>
+  <main class="auth-main"><div class="auth-box">
+    <h1>Register your company</h1>
+    <p>Company registration creates the first administrator account for this company.</p>
+    <form id="companyRegisterForm" class="stack-sm" novalidate>
+      <div class="alert alert-danger" id="companyRegisterError" role="alert" hidden></div>
+      <fieldset class="stack-sm"><legend>Company details</legend>
+        <div class="field"><label for="companyNameInput">Company name</label><input class="input" id="companyNameInput" name="company_name" maxlength="160" required></div>
+        <div class="field"><label for="companyEmail">Company email</label><input class="input" id="companyEmail" name="company_email" type="email" autocomplete="email" required></div>
+        <div class="field"><label for="companyPhone">Contact number <span class="hint">Optional</span></label><input class="input" id="companyPhone" name="phone" type="tel" maxlength="20"></div>
+        <div class="field"><label for="companyAddress">Address <span class="hint">Optional</span></label><textarea class="input" id="companyAddress" name="address" rows="2"></textarea></div>
+      </fieldset>
+      <fieldset class="stack-sm"><legend>First administrator</legend>
+        <div class="field"><label for="adminName">Full name</label><input class="input" id="adminName" name="admin_name" autocomplete="name" maxlength="150" required></div>
+        <div class="field"><label for="adminEmail">Email</label><input class="input" id="adminEmail" name="admin_email" type="email" autocomplete="email" required></div>
+        <div class="field"><label for="adminPassword">Password</label><input class="input" id="adminPassword" name="password" type="password" autocomplete="new-password" required></div>
+        <div class="field"><label for="adminPasswordConfirm">Confirm password</label><input class="input" id="adminPasswordConfirm" name="confirm_password" type="password" autocomplete="new-password" required></div>
+      </fieldset>
+      <button class="btn btn-primary btn-block" type="submit">Create company workspace</button>
+    </form>
+    <div class="auth-links"><a class="link-btn" href="index.html">Back to sign in</a></div>
+  </div></main>
+</div>
+<script src="js/app.js"></script>
+<script src="js/company-register.js"></script>
+</body>
+</html>

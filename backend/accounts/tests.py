@@ -7,6 +7,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 from rest_framework.test import APIClient
 
+from .test_utils import test_company
 from .models import Announcement, AttendanceSettings, ChatConversation, ChatMessage, Employee, EmployeeDocument, LeaveRequest, Notification, UserProfile
 
 
@@ -16,9 +17,9 @@ class RoleBasedAccessTests(TestCase):
         self.admin = User.objects.create_user('admin', password='AdminPass123!')
         self.employee = User.objects.create_user('employee', password='EmployeePass123!')
         self.other_employee = User.objects.create_user('other', password='OtherPass123!')
-        UserProfile.objects.create(user=self.admin, role='ADMIN')
-        UserProfile.objects.create(user=self.employee, role='EMPLOYEE')
-        UserProfile.objects.create(user=self.other_employee, role='EMPLOYEE')
+        UserProfile.objects.create(user=self.admin, role='ADMIN', company=test_company())
+        UserProfile.objects.create(user=self.employee, role='EMPLOYEE', company=test_company())
+        UserProfile.objects.create(user=self.other_employee, role='EMPLOYEE', company=test_company())
         self.leave = LeaveRequest.objects.create(
             employee=self.other_employee,
             leave_type='Casual Leave',
@@ -144,8 +145,8 @@ class AnnouncementAccessTests(TestCase):
     def setUp(self):
         self.admin = User.objects.create_user('announcement-admin', password='AdminPass123!')
         self.employee = User.objects.create_user('announcement-employee', password='EmployeePass123!')
-        UserProfile.objects.create(user=self.admin, role='ADMIN')
-        UserProfile.objects.create(user=self.employee, role='EMPLOYEE')
+        UserProfile.objects.create(user=self.admin, role='ADMIN', company=test_company())
+        UserProfile.objects.create(user=self.employee, role='EMPLOYEE', company=test_company())
         self.admin_client = APIClient()
         self.admin_client.force_authenticate(self.admin)
         self.employee_client = APIClient()
@@ -166,6 +167,7 @@ class AnnouncementAccessTests(TestCase):
 
     def test_employee_can_read_but_not_publish_or_remove_announcements(self):
         announcement = Announcement.objects.create(
+            company=test_company(),
             title='Office update',
             message='The office will open at 10 AM tomorrow.',
             created_by=self.admin,
@@ -196,12 +198,13 @@ class PrivateChatAccessTests(TestCase):
         self.other_admin = User.objects.create_user('other-chat-admin', password='AdminPass123!')
         self.employee = User.objects.create_user('chat-employee', password='EmployeePass123!')
         self.other_employee = User.objects.create_user('other-chat-employee', password='EmployeePass123!')
-        UserProfile.objects.create(user=self.admin, role='ADMIN')
-        UserProfile.objects.create(user=self.other_admin, role='ADMIN')
-        UserProfile.objects.create(user=self.employee, role='EMPLOYEE')
-        UserProfile.objects.create(user=self.other_employee, role='EMPLOYEE')
+        UserProfile.objects.create(user=self.admin, role='ADMIN', company=test_company())
+        UserProfile.objects.create(user=self.other_admin, role='ADMIN', company=test_company())
+        UserProfile.objects.create(user=self.employee, role='EMPLOYEE', company=test_company())
+        UserProfile.objects.create(user=self.other_employee, role='EMPLOYEE', company=test_company())
         self.employee_record = Employee.objects.create(
             user=self.employee,
+            company=test_company(),
             employee_id='CHAT-001',
             phone='5550101',
             department='Operations',
@@ -210,6 +213,7 @@ class PrivateChatAccessTests(TestCase):
         )
         self.other_employee_record = Employee.objects.create(
             user=self.other_employee,
+            company=test_company(),
             employee_id='CHAT-002',
             phone='5550102',
             department='Finance',
@@ -285,7 +289,7 @@ class PrivateChatAccessTests(TestCase):
 
     def test_signup_employee_without_employee_record_is_listed_and_chat_eligible(self):
         signup_employee = User.objects.create_user('signup-chat-employee', password='EmployeePass123!')
-        UserProfile.objects.create(user=signup_employee, role='EMPLOYEE')
+        UserProfile.objects.create(user=signup_employee, role='EMPLOYEE', company=test_company())
 
         directory = self.admin_client.get('/api/chat/employees/')
         employee_entry = next(item for item in directory.data if item['username'] == signup_employee.username)
@@ -313,9 +317,9 @@ class NotificationInboxTests(TestCase):
         self.admin = User.objects.create_user('notification-admin', password='AdminPass123!')
         self.employee = User.objects.create_user('notification-employee', password='EmployeePass123!')
         self.other_employee = User.objects.create_user('notification-other', password='EmployeePass123!')
-        UserProfile.objects.create(user=self.admin, role='ADMIN')
-        UserProfile.objects.create(user=self.employee, role='EMPLOYEE')
-        UserProfile.objects.create(user=self.other_employee, role='EMPLOYEE')
+        UserProfile.objects.create(user=self.admin, role='ADMIN', company=test_company())
+        UserProfile.objects.create(user=self.employee, role='EMPLOYEE', company=test_company())
+        UserProfile.objects.create(user=self.other_employee, role='EMPLOYEE', company=test_company())
         self.admin_client = APIClient()
         self.admin_client.force_authenticate(self.admin)
         self.employee_client = APIClient()
@@ -423,11 +427,9 @@ class NotificationInboxTests(TestCase):
         self.assertIn('DOCUMENT', employee_kinds)
 
     def test_attendance_checkin_notifies_administrators(self):
-        AttendanceSettings.objects.create(
-            latitude='12.971600',
-            longitude='77.594600',
-            radius_meters=100,
-            is_enabled=True,
+        AttendanceSettings.objects.update_or_create(
+            company=test_company(),
+            defaults={'latitude': '12.971600', 'longitude': '77.594600', 'radius_meters': 100, 'is_enabled': True},
         )
 
         response = self.employee_client.post('/api/attendance/check-in/', {

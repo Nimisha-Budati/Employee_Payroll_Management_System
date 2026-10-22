@@ -17,6 +17,7 @@ from django.test import TestCase, override_settings
 from django.utils import timezone
 from rest_framework.test import APIClient
 
+from accounts.test_utils import test_company
 from accounts.models import AttendanceRecord, LeaveRequest, UserProfile
 from payroll.models import Payslip
 from payroll.tests import make_employee, make_structure
@@ -40,7 +41,7 @@ class AssistantTestCase(TestCase):
     def setUp(self):
         cache.clear()
         self.admin = User.objects.create_user('admin', 'admin@example.com', 'AdminPass123!')
-        UserProfile.objects.create(user=self.admin, role='ADMIN')
+        UserProfile.objects.create(user=self.admin, role='ADMIN', company=test_company())
         self.asha = make_employee('asha', 'EMP001')
         self.ravi = make_employee('ravi', 'EMP002')
         make_structure(self.asha.user, da=Decimal('5000'), bonus=Decimal('1000'))
@@ -83,7 +84,7 @@ class AssistantWithoutKeyTests(AssistantTestCase):
 @KEY
 class AssistantConversationTests(AssistantTestCase):
     def test_chatbot_keeps_history_and_sends_it(self):
-        AIKnowledgeBase.objects.create(company_overview='We are Hanova Labs, a 40-person software firm.')
+        AIKnowledgeBase.objects.update_or_create(company=test_company(), defaults={'company_overview': 'We are Hanova Labs, a 40-person software firm.'})
         client = self.login(self.asha.user)
         conversation = self.start('CHAT')
         with mock.patch('assistant.gemini.requests.post', return_value=gemini_reply('Use the Leave page.')) as post:
@@ -251,7 +252,7 @@ class KnowledgeBaseTests(AssistantTestCase):
         admin = self.login(self.admin)
         response = admin.put('/api/ai/knowledge/', {'leave_policy': 'Leave must be applied 3 days ahead.'}, format='json')
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(AIKnowledgeBase.load().leave_policy, 'Leave must be applied 3 days ahead.')
+        self.assertEqual(AIKnowledgeBase.load(test_company()).leave_policy, 'Leave must be applied 3 days ahead.')
 
 
 class ConversationManagementTests(AssistantTestCase):

@@ -42,12 +42,12 @@ def _claim(key):
         return False
 
 
-def _document_reminders(settings, today):
+def _document_reminders(settings, today, company_id=None):
     sent = 0
     thresholds = sorted(settings.reminder_days)           # ascending, e.g. [1, 7, 30]
     horizon = today + timedelta(days=max(thresholds))
     documents = EmployeeDocument.objects.select_related('employee').filter(
-        expiry_date__isnull=False, expiry_date__lte=horizon, employee__is_active=True,
+        employee__userprofile__company_id=company_id, expiry_date__isnull=False, expiry_date__lte=horizon, employee__is_active=True,
     )
     for document in documents:
         days_left = (document.expiry_date - today).days
@@ -62,20 +62,21 @@ def _document_reminders(settings, today):
         notify_user(document.employee, 'REMINDER', title, f'Your document "{document.title}" {text}. Upload a renewed copy in Documents.',
                     'employee-documents.html')
         notify_admins('REMINDER', title, f'{document.employee.username}\'s document "{document.title}" {text}.',
-                      'admin-documents.html?expiry=' + ('EXPIRED' if stage == 'expired' else 'EXPIRING'))
+                      'admin-documents.html?expiry=' + ('EXPIRED' if stage == 'expired' else 'EXPIRING'), company_id=company_id)
         sent += 1
     return sent
 
 
-def pending_counts(older_than):
+def pending_counts(older_than, company_id=None):
     from workforce.models import OvertimeRecord
 
+    scope = {'employee__userprofile__company_id': company_id} if company_id is not None else {}
     return {
-        'leave': LeaveRequest.objects.filter(status='PENDING', applied_at__lte=older_than).count(),
-        'wfh': WorkFromHomeRequest.objects.filter(status='PENDING', applied_at__lte=older_than).count(),
-        'corrections': AttendanceCorrectionRequest.objects.filter(status='PENDING', created_at__lte=older_than).count(),
-        'overtime': OvertimeRecord.objects.filter(status=OvertimeRecord.PENDING, created_at__lte=older_than).count(),
-        'documents': EmployeeDocument.objects.filter(status='PENDING', uploaded_at__lte=older_than).count(),
+        'leave': LeaveRequest.objects.filter(**scope, status='PENDING', applied_at__lte=older_than).count(),
+        'wfh': WorkFromHomeRequest.objects.filter(**scope, status='PENDING', applied_at__lte=older_than).count(),
+        'corrections': AttendanceCorrectionRequest.objects.filter(**scope, status='PENDING', created_at__lte=older_than).count(),
+        'overtime': OvertimeRecord.objects.filter(**scope, status=OvertimeRecord.PENDING, created_at__lte=older_than).count(),
+        'documents': EmployeeDocument.objects.filter(**scope, status='PENDING', uploaded_at__lte=older_than).count(),
     }
 
 
@@ -83,23 +84,23 @@ LABELS = {'leave': 'leave request', 'wfh': 'work-from-home request', 'correction
           'overtime': 'overtime claim', 'documents': 'document'}
 
 
-def _pending_digest(settings, now, today):
-    counts = pending_counts(now - timedelta(days=settings.pending_after_days))
+def _pending_digest(settings, now, today, company_id=None):
+    counts = pending_counts(now - timedelta(days=settings.pending_after_days), company_id)
     parts = [f'{count} {LABELS[key]}{"s" if count != 1 else ""}' for key, count in counts.items() if count]
-    if not parts or not _claim(f'pending:{today.isoformat()}'):
+    if not parts or not _claim(f'pending:{company_id or "unassigned"}:{today.isoformat()}'):
         return 0
     notify_admins('REMINDER', 'Requests waiting for approval',
-                  f'Waiting {settings.pending_after_days}+ day(s): {", ".join(parts)}.', 'admin-dashboard.html')
+                  f'Waiting {settings.pending_after_days}+ day(s): {", ".join(parts)}.', 'admin-dashboard.html', company_id=company_id)
     return 1
 
 
-def _onboarding_reminders(today):
+def _onboarding_reminders(today, company_id=None):
     from .onboarding import checklist
 
     sent = 0
     year, week, _ = today.isocalendar()
     employees = Employee.objects.select_related('user').filter(
-        onboarding_status=Employee.ONBOARDING_PENDING, status='ACTIVE', user__is_active=True,
+        company_id=company_id, onboarding_status=Employee.ONBOARDING_PENDING, status='ACTIVE', user__is_active=True,
     )
     for employee in employees:
         missing = [item['label'] for item in checklist(employee) if not item['done'] and item['owner'] == 'EMPLOYEE']
@@ -110,25 +111,30 @@ def _onboarding_reminders(today):
     return sent
 
 
-def run_reminders(now=None):
-    settings = ReminderSettings.load()
+def run_reminders(now=None, company=None):
+    # Reminder settings and recipients are tenant-owned. A missing tenant must never
+    # widen the query to unassigned users or notify administrators across companies.
+    if company is None:
+        return {'documents': 0, 'pending_digest': 0, 'onboarding': 0, 'enabled': False}
+    company_id = getattr(company, 'pk', None)
+    settings = ReminderSettings.load(company)
     now = now or timezone.now()
     today = timezone.localdate(now)
     result = {'documents': 0, 'pending_digest': 0, 'onboarding': 0, 'enabled': settings.enabled}
     if settings.enabled:
-        result['documents'] = _document_reminders(settings, today)
-        result['pending_digest'] = _pending_digest(settings, now, today)
-        result['onboarding'] = _onboarding_reminders(today)
+        result['documents'] = _document_reminders(settings, today, company_id)
+        result['pending_digest'] = _pending_digest(settings, now, today, company_id)
+        result['onboarding'] = _onboarding_reminders(today, company_id)
     ReminderSettings.objects.filter(pk=settings.pk).update(last_run_at=now)
     return result
 
 
-def maybe_run_reminders():
+def maybe_run_reminders(company=None):
     """Run reminders when they have not run in the last few hours (keeps them working without a scheduler)."""
-    settings = ReminderSettings.load()
+    settings = ReminderSettings.load(company)
     if settings.enabled and (settings.last_run_at is None or timezone.now() - settings.last_run_at >= AUTO_RUN_INTERVAL):
         try:
-            return run_reminders()
+            return run_reminders(company=company)
         except Exception:   # reminders must never break the page that triggered them
             return None
     return None
@@ -156,7 +162,7 @@ class ReminderSettingsSerializer(serializers.ModelSerializer):
 @api_view(['GET', 'PUT'])
 @permission_classes([IsAuthenticated, IsAdminUserRole])
 def reminder_settings(request):
-    settings = ReminderSettings.load()
+    settings = ReminderSettings.load(request.user.userprofile.company)
     if request.method == 'GET':
         return Response(ReminderSettingsSerializer(settings).data)
     serializer = ReminderSettingsSerializer(settings, data=request.data, partial=True)
@@ -172,7 +178,7 @@ def reminder_settings(request):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated, IsAdminUserRole])
 def reminder_run(request):
-    result = run_reminders()
+    result = run_reminders(company=request.user.userprofile.company)
     record_audit(request, 'RUN', 'Reminder', '', f'Ran reminders: {result["documents"]} document, {result["pending_digest"]} pending digest, '
                                                 f'{result["onboarding"]} onboarding.')
     return Response(result)

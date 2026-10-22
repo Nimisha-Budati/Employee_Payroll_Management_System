@@ -25,16 +25,17 @@ CENT = Decimal('0.01')
 
 
 def shift_for(user, day):
+    company_id = getattr(getattr(user, 'userprofile', None), 'company_id', None)
     assignment = (
         ShiftAssignment.objects.select_related('shift')
-        .filter(employee=user, start_date__lte=day)
+        .filter(employee=user, shift__company_id=company_id, start_date__lte=day)
         .filter(Q(end_date__isnull=True) | Q(end_date__gte=day))
         .order_by('-start_date', '-id')
         .first()
     )
     if assignment is not None:
         return assignment.shift
-    return Shift.objects.filter(is_default=True, is_active=True).first()
+    return Shift.objects.filter(company_id=company_id, is_default=True, is_active=True).first()
 
 
 def scheduled_start(shift, day):

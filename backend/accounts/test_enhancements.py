@@ -14,6 +14,7 @@ from rest_framework.test import APIClient
 from payroll.models import Payslip
 from payroll.tests import make_employee, make_structure
 
+from .test_utils import test_company
 from .models import (
     AttendanceCorrectionRequest, AttendanceRecord, AuditLog, EmployeeDocument, Holiday, LeaveRequest, Notification,
     NotificationPreference, ReminderLog, UserProfile, WorkFromHomeRequest,
@@ -31,7 +32,7 @@ class BaseCase(TestCase):
     def setUp(self):
         cache.clear()
         self.admin = User.objects.create_user('admin', 'admin@example.com', 'AdminPass123!')
-        UserProfile.objects.create(user=self.admin, role='ADMIN')
+        UserProfile.objects.create(user=self.admin, role='ADMIN', company=test_company())
         self.asha = make_employee('asha', 'EMP001', department='Engineering')
         self.ravi = make_employee('ravi', 'EMP002', department='Engineering')
         self.meena = make_employee('meena', 'EMP003', department='Sales')
@@ -85,7 +86,7 @@ class AttendanceCorrectionTests(BaseCase):
     def test_check_in_correction_recalculates_late_minutes(self):
         from workforce.models import Shift
 
-        Shift.objects.create(name='General', start_time=time(9, 0), end_time=time(18, 0), grace_minutes=10, is_default=True)
+        Shift.objects.create(company=test_company(), name='General', start_time=time(9, 0), end_time=time(18, 0), grace_minutes=10, is_default=True)
         created = self.request(correction_type='WRONG_TIMES', check_in='09:05', check_out=None)
         self.assertEqual(created.status_code, 201, created.data)
         self.admin_client.post(f'/api/attendance/corrections/{created.data["id"]}/review/', {'status': 'APPROVED'}, format='json')
@@ -163,7 +164,7 @@ class TeamCalendarTests(BaseCase):
                                     end_date=self.start + timedelta(days=2), reason='mine', status='PENDING')
         WorkFromHomeRequest.objects.create(employee=self.asha.user, start_date=self.start, end_date=self.start,
                                            reason='plumber', status='APPROVED')
-        Holiday.objects.create(name='Founders Day', date=self.start + timedelta(days=4))
+        Holiday.objects.create(company=test_company(), name='Founders Day', date=self.start + timedelta(days=4))
 
     def get(self, client, **params):
         params.setdefault('start', self.start.isoformat())
@@ -298,17 +299,17 @@ class DocumentExpiryAndReminderTests(BaseCase):
 
     def test_expiry_reminders_are_sent_once_per_stage(self):
         doc = self.upload(expiry=self.today + timedelta(days=6)).data
-        first = run_reminders()
+        first = run_reminders(company=test_company())
         self.assertEqual(first['documents'], 1)
-        self.assertEqual(run_reminders()['documents'], 0)
+        self.assertEqual(run_reminders(company=test_company())['documents'], 0)
         employee_notes = Notification.objects.filter(recipient=self.asha.user, kind='REMINDER')
         self.assertEqual(employee_notes.count(), 1)
         self.assertIn('expires in 6 days', employee_notes.first().message)
         self.assertTrue(Notification.objects.filter(recipient=self.admin, kind='REMINDER', title='Document expiring soon').exists())
         EmployeeDocument.objects.filter(pk=doc['id']).update(expiry_date=self.today - timedelta(days=1))
-        self.assertEqual(run_reminders()['documents'], 1)
+        self.assertEqual(run_reminders(company=test_company())['documents'], 1)
         self.assertTrue(Notification.objects.filter(recipient=self.asha.user, title='Document expired').exists())
-        self.assertEqual(run_reminders()['documents'], 0)
+        self.assertEqual(run_reminders(company=test_company())['documents'], 0)
 
     def test_pending_digest_settings_and_command(self):
         from django.core.management import call_command
@@ -322,7 +323,7 @@ class DocumentExpiryAndReminderTests(BaseCase):
         self.assertIn('1 pending-approval digest', out.getvalue())
         digest = Notification.objects.get(recipient=self.admin, title='Requests waiting for approval')
         self.assertIn('1 leave request', digest.message)
-        self.assertEqual(run_reminders()['pending_digest'], 0)   # once per day
+        self.assertEqual(run_reminders(company=test_company())['pending_digest'], 0)   # once per day
 
         self.assertEqual(self.asha_client.get('/api/reminders/settings/').status_code, 403)
         self.assertEqual(self.admin_client.put('/api/reminders/settings/', {'pending_after_days': 0}, format='json').status_code, 400)

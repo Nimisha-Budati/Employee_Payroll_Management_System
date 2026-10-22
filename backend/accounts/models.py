@@ -1,6 +1,24 @@
 from django.contrib.auth.models import User
 from django.db import models
+from django.db.models.functions import Lower
 from django.utils import timezone
+
+
+class Company(models.Model):
+    """Tenant boundary for a customer organisation."""
+    name = models.CharField(max_length=160)
+    email = models.EmailField()
+    phone = models.CharField(max_length=20, blank=True)
+    address = models.TextField(blank=True)
+    is_legacy = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['name', 'id']
+        constraints = [models.UniqueConstraint(Lower('email'), name='one_company_per_email_case_insensitive')]
+
+    def __str__(self):
+        return self.name
 
 
 class UserProfile(models.Model):
@@ -14,6 +32,7 @@ class UserProfile(models.Model):
     phone = models.CharField(max_length=20, blank=True)
     address = models.TextField(blank=True)
     profile_photo = models.FileField(upload_to='profile_photos/', blank=True)
+    company = models.ForeignKey(Company, null=True, blank=True, on_delete=models.PROTECT, related_name='profiles')
 
     def __str__(self):
         return self.user.username
@@ -21,13 +40,14 @@ class UserProfile(models.Model):
 
 class Employee(models.Model):
     STATUS_CHOICES = [('ACTIVE', 'Active'), ('INACTIVE', 'Inactive')]
-    employee_id = models.CharField(max_length=20, unique=True)
+    employee_id = models.CharField(max_length=20)
     phone = models.CharField(max_length=15)
     department = models.CharField(max_length=100)
     designation = models.CharField(max_length=100)
     joining_date = models.DateField()
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='ACTIVE')
     user = models.OneToOneField(User, on_delete=models.CASCADE)
+    company = models.ForeignKey(Company, on_delete=models.PROTECT, related_name='employees')
     # Date the employee was last deactivated (cleared on reactivation); used for headcount trends.
     deactivated_at = models.DateField(null=True, blank=True)
 
@@ -45,10 +65,14 @@ class Employee(models.Model):
     def __str__(self):
         return f'{self.employee_id} - {self.user.username}'
 
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['company', 'employee_id'], name='one_employee_code_per_company')]
+
 
 class OnboardingSettings(models.Model):
     """Singleton (pk=1): what every new employee must provide before onboarding can be completed."""
 
+    company = models.ForeignKey(Company, null=True, on_delete=models.CASCADE, related_name='onboarding_settings')
     required_document_types = models.JSONField(default=list, blank=True)   # EmployeeDocument.DOCUMENT_TYPES codes
     require_address = models.BooleanField(default=True)
     require_profile_photo = models.BooleanField(default=False)
@@ -56,9 +80,15 @@ class OnboardingSettings(models.Model):
     updated_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
     updated_at = models.DateTimeField(auto_now=True)
 
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['company'], name='one_onboarding_settings_per_company')]
+
     @classmethod
-    def load(cls):
-        return cls.objects.get_or_create(pk=1, defaults={'required_document_types': ['IDENTITY', 'ADDRESS']})[0]
+    def load(cls, company=None):
+        defaults = {'required_document_types': ['IDENTITY', 'ADDRESS']}
+        if company is None:
+            return cls.objects.filter(company__isnull=True).first() or cls.objects.create(company=None, **defaults)
+        return cls.objects.get_or_create(company=company, defaults=defaults)[0]
 
 
 class PasswordResetOTP(models.Model):
@@ -77,7 +107,8 @@ class PasswordResetOTP(models.Model):
 class LeaveType(models.Model):
     """A leave type and its annual allowance, managed by administrators (no limits live in code)."""
 
-    name = models.CharField(max_length=50, unique=True)
+    company = models.ForeignKey(Company, null=True, on_delete=models.CASCADE, related_name='leave_types')
+    name = models.CharField(max_length=50)
     description = models.CharField(max_length=255, blank=True)
     # Days allowed per employee per leave year; empty means no limit (for example unpaid leave).
     annual_days = models.PositiveSmallIntegerField(null=True, blank=True)
@@ -91,6 +122,7 @@ class LeaveType(models.Model):
 
     class Meta:
         ordering = ['sort_order', 'name']
+        constraints = [models.UniqueConstraint(fields=['company', 'name'], name='one_leave_type_name_per_company')]
 
     def __str__(self):
         return self.name
@@ -103,6 +135,7 @@ class LeaveType(models.Model):
 class LeavePolicySettings(models.Model):
     """Organisation-wide leave rules (single row)."""
 
+    company = models.ForeignKey(Company, null=True, on_delete=models.CASCADE, related_name='leave_policy_settings')
     leave_year_start_month = models.PositiveSmallIntegerField(default=1)   # 1 = January (calendar year)
     min_notice_days = models.PositiveSmallIntegerField(default=0)          # days between applying and the start date
     max_days_per_request = models.PositiveSmallIntegerField(null=True, blank=True)
@@ -110,13 +143,14 @@ class LeavePolicySettings(models.Model):
     updated_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
     updated_at = models.DateTimeField(auto_now=True)
 
-    def save(self, *args, **kwargs):
-        self.pk = 1
-        super().save(*args, **kwargs)
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['company'], name='one_leave_policy_per_company')]
 
     @classmethod
-    def load(cls):
-        return cls.objects.get_or_create(pk=1)[0]
+    def load(cls, company=None):
+        if company is None:
+            return cls.objects.filter(company__isnull=True).first() or cls.objects.create(company=None)
+        return cls.objects.get_or_create(company=company)[0]
 
 
 class EmployeeLeaveBalance(models.Model):
@@ -161,7 +195,8 @@ class LeaveRequest(models.Model):
             delta = self.end_date - self.start_date
             self.number_of_days = max(1, delta.days + 1)
         if self.policy_id is None and self.leave_type:
-            self.policy = LeaveType.objects.filter(name__iexact=self.leave_type).first()
+            company_id = getattr(getattr(self.employee, 'userprofile', None), 'company_id', None)
+            self.policy = LeaveType.objects.filter(name__iexact=self.leave_type, company_id=company_id).first()
         if self.policy_id and not self.leave_type:
             self.leave_type = self.policy.name
         super().save(*args, **kwargs)
@@ -205,7 +240,8 @@ class EmployeeDocument(models.Model):
             return 'NONE'
         today = today or timezone.localdate()
         if warn_days is None:
-            warn_days = ReminderSettings.load().warning_window_days
+            company = getattr(getattr(self.employee, 'userprofile', None), 'company', None)
+            warn_days = ReminderSettings.load(company).warning_window_days
         if self.expiry_date < today:
             return 'EXPIRED'
         return 'EXPIRING' if (self.expiry_date - today).days <= warn_days else 'VALID'
@@ -217,8 +253,9 @@ class Holiday(models.Model):
         ('TENTATIVE', 'Tentative'),
     ]
 
+    company = models.ForeignKey(Company, null=True, on_delete=models.CASCADE, related_name='holidays')
     name = models.CharField(max_length=100)
-    date = models.DateField(unique=True)
+    date = models.DateField()
     holiday_type = models.CharField(max_length=20, choices=HOLIDAY_TYPES, default='FIXED')
     description = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -226,12 +263,14 @@ class Holiday(models.Model):
 
     class Meta:
         ordering = ['date']
+        constraints = [models.UniqueConstraint(fields=['company', 'date'], name='one_holiday_per_company_day')]
 
     def __str__(self):
         return f"{self.name} ({self.date})"
 
 
 class Announcement(models.Model):
+    company = models.ForeignKey(Company, null=True, on_delete=models.CASCADE, related_name='announcements')
     title = models.CharField(max_length=120)
     message = models.TextField()
     created_by = models.ForeignKey(
@@ -332,6 +371,7 @@ class NotificationPreference(models.Model):
 class ReminderSettings(models.Model):
     """Singleton (pk=1) for automatic reminders (document expiry, pending approvals, onboarding)."""
 
+    company = models.ForeignKey(Company, null=True, on_delete=models.CASCADE, related_name='reminder_settings')
     enabled = models.BooleanField(default=True)
     # Days before a document's expiry date on which the employee and administrators are reminded.
     document_reminder_days = models.JSONField(default=list, blank=True)
@@ -343,9 +383,15 @@ class ReminderSettings(models.Model):
 
     DEFAULT_DOCUMENT_DAYS = [30, 7, 1]
 
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['company'], name='one_reminder_settings_per_company')]
+
     @classmethod
-    def load(cls):
-        return cls.objects.get_or_create(pk=1, defaults={'document_reminder_days': list(cls.DEFAULT_DOCUMENT_DAYS)})[0]
+    def load(cls, company=None):
+        defaults = {'document_reminder_days': list(cls.DEFAULT_DOCUMENT_DAYS)}
+        if company is None:
+            return cls.objects.filter(company__isnull=True).first() or cls.objects.create(company=None, **defaults)
+        return cls.objects.get_or_create(company=company, defaults=defaults)[0]
 
     @property
     def reminder_days(self):
@@ -373,6 +419,7 @@ class NotificationBroadcast(models.Model):
         ('EMPLOYEES', 'Selected employees'),
     ]
 
+    company = models.ForeignKey(Company, null=True, on_delete=models.CASCADE, related_name='notification_broadcasts')
     title = models.CharField(max_length=160)
     message = models.TextField()
     target_type = models.CharField(max_length=12, choices=TARGET_CHOICES)
@@ -391,18 +438,18 @@ class NotificationBroadcast(models.Model):
 
 class AttendanceSettings(models.Model):
     """The single company location used to validate employee attendance."""
+    company = models.ForeignKey(Company, null=True, on_delete=models.CASCADE, related_name='attendance_settings')
     latitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
     longitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
     radius_meters = models.PositiveIntegerField(default=100)
     is_enabled = models.BooleanField(default=False)
     updated_at = models.DateTimeField(auto_now=True)
 
-    def save(self, *args, **kwargs):
-        self.pk = 1
-        super().save(*args, **kwargs)
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['company'], name='one_attendance_settings_per_company')]
 
     def __str__(self):
-        return 'Company attendance location'
+        return f'{self.company or "Company"} attendance location'
 
 
 class AttendanceRecord(models.Model):

@@ -93,14 +93,14 @@ def resolve_range(params):
     return months
 
 
-def _series(months, department):
+def _series(months, department, company_id=None):
     """Monthly figures for a list of (year, month)."""
     start, end = _bounds(*months[0])[0], _bounds(*months[-1])[1]
     by_month = {key: defaultdict(lambda: ZERO) for key in months}
 
     payslips = Payslip.objects.filter(
         Q(year__gt=months[0][0]) | Q(year=months[0][0], month__gte=months[0][1]),
-    ).filter(Q(year__lt=months[-1][0]) | Q(year=months[-1][0], month__lte=months[-1][1]))
+    ).filter(Q(year__lt=months[-1][0]) | Q(year=months[-1][0], month__lte=months[-1][1]), employee__userprofile__company_id=company_id)
     if department:
         payslips = payslips.filter(department__iexact=department)
     for row in payslips.values('year', 'month').annotate(
@@ -115,9 +115,9 @@ def _series(months, department):
 
     from workforce.models import OvertimeRecord
 
-    overtime = OvertimeRecord.objects.filter(status=OvertimeRecord.APPROVED, date__range=(start, end))
-    attendance = AttendanceRecord.objects.filter(date__range=(start, end), check_in_at__isnull=False)
-    leaves = LeaveRequest.objects.filter(status='APPROVED', start_date__lte=end, end_date__gte=start)
+    overtime = OvertimeRecord.objects.filter(employee__userprofile__company_id=company_id, status=OvertimeRecord.APPROVED, date__range=(start, end))
+    attendance = AttendanceRecord.objects.filter(employee__userprofile__company_id=company_id, date__range=(start, end), check_in_at__isnull=False)
+    leaves = LeaveRequest.objects.filter(employee__userprofile__company_id=company_id, status='APPROVED', start_date__lte=end, end_date__gte=start)
     if department:
         overtime = overtime.filter(employee__employee__department__iexact=department)
         attendance = attendance.filter(employee__employee__department__iexact=department)
@@ -140,7 +140,7 @@ def _series(months, department):
             by_month[(day.year, day.month)]['leave_days'] += 1
             day += timedelta(days=1)
 
-    employees = Employee.objects.all()
+    employees = Employee.objects.filter(company_id=company_id)
     if department:
         employees = employees.filter(department__iexact=department)
     people = list(employees.values_list('joining_date', 'deactivated_at', 'status'))
@@ -197,27 +197,27 @@ def _totals(rows):
     }
 
 
-def _departments(months, department):
+def _departments(months, department, company_id=None):
     first, last = months[0], months[-1]
     start, end = _bounds(*first)[0], _bounds(*last)[1]
     payslips = Payslip.objects.filter(Q(year__gt=first[0]) | Q(year=first[0], month__gte=first[1])) \
-        .filter(Q(year__lt=last[0]) | Q(year=last[0], month__lte=last[1]))
+        .filter(Q(year__lt=last[0]) | Q(year=last[0], month__lte=last[1]), employee__userprofile__company_id=company_id)
     result = defaultdict(lambda: {'gross': ZERO, 'net': ZERO, 'overtime_amount': ZERO, 'late': 0, 'leave_days': 0, 'headcount': 0, 'payslips': 0})
     for row in payslips.values('department').annotate(gross=Sum('gross_earnings'), net=Sum('net_salary'), count=Count('id')):
         item = result[row['department'] or 'Unassigned']
         item['gross'], item['net'], item['payslips'] = row['gross'] or ZERO, row['net'] or ZERO, row['count']
     from workforce.models import OvertimeRecord
 
-    for row in OvertimeRecord.objects.filter(status=OvertimeRecord.APPROVED, date__range=(start, end)) \
+    for row in OvertimeRecord.objects.filter(employee__userprofile__company_id=company_id, status=OvertimeRecord.APPROVED, date__range=(start, end)) \
             .values('employee__employee__department').annotate(amount=Sum('amount')):
         result[row['employee__employee__department'] or 'Unassigned']['overtime_amount'] = row['amount'] or ZERO
-    for row in AttendanceRecord.objects.filter(date__range=(start, end), late_minutes__gt=0) \
+    for row in AttendanceRecord.objects.filter(employee__userprofile__company_id=company_id, date__range=(start, end), late_minutes__gt=0) \
             .values('employee__employee__department').annotate(late=Count('id')):
         result[row['employee__employee__department'] or 'Unassigned']['late'] = row['late']
-    for dept, first_day, last_day in LeaveRequest.objects.filter(status='APPROVED', start_date__lte=end, end_date__gte=start) \
+    for dept, first_day, last_day in LeaveRequest.objects.filter(employee__userprofile__company_id=company_id, status='APPROVED', start_date__lte=end, end_date__gte=start) \
             .values_list('employee__employee__department', 'start_date', 'end_date'):
         result[dept or 'Unassigned']['leave_days'] += (min(last_day, end) - max(first_day, start)).days + 1
-    for row in Employee.objects.filter(status='ACTIVE').values('department').annotate(count=Count('id')):
+    for row in Employee.objects.filter(company_id=company_id, status='ACTIVE').values('department').annotate(count=Count('id')):
         result[row['department'] or 'Unassigned']['headcount'] = row['count']
     rows = [{'department': name, **values} for name, values in result.items()]
     if department:
@@ -225,16 +225,18 @@ def _departments(months, department):
     return sorted(rows, key=lambda row: (-row['gross'], row['department']))
 
 
-def _leave_utilisation(department):
-    rules = policy_settings()
+def _leave_utilisation(department, company_id=None):
+    from accounts.models import Company
+    company = Company.objects.filter(pk=company_id).first()
+    rules = policy_settings(company)
     year = leave_year_of(timezone.localdate(), rules)
     start, end = leave_year_bounds(year, rules)
-    employees = Employee.objects.filter(status='ACTIVE', user__is_active=True)
+    employees = Employee.objects.filter(company_id=company_id, status='ACTIVE', user__is_active=True)
     if department:
         employees = employees.filter(department__iexact=department)
     user_ids = list(employees.values_list('user_id', flat=True))
     rows = []
-    for leave_type in LeaveType.objects.filter(is_active=True).order_by('sort_order', 'name'):
+    for leave_type in LeaveType.objects.filter(company_id=company_id, is_active=True).order_by('sort_order', 'name'):
         requests = LeaveRequest.objects.filter(employee_id__in=user_ids, policy=leave_type, start_date__lte=end, end_date__gte=start)
         used = sum((min(last, end) - max(first, start)).days + 1 for first, last in
                    requests.filter(status='APPROVED').values_list('start_date', 'end_date'))
@@ -252,12 +254,12 @@ def _leave_utilisation(department):
     return {'year': year, 'label': leave_year_label(year, rules), 'employees': len(user_ids), 'types': rows}
 
 
-def build_analytics(params):
+def build_analytics(params, company_id=None):
     months = resolve_range(params)
     department = (params.get('department') or '').strip()
-    rows, unknown = _series(months, department)
+    rows, unknown = _series(months, department, company_id)
     previous_months = month_list(shift_months(*months[0], -len(months)), shift_months(*months[0], -1))
-    previous_rows, _ = _series(previous_months, department)
+    previous_rows, _ = _series(previous_months, department, company_id)
     current, previous = _totals(rows), _totals(previous_rows)
     comparison = {key: change(previous[key], current[key]) for key in (
         'payroll_cost', 'net_pay', 'overtime_cost', 'late_checkins', 'leave_days', 'joined', 'left', 'headcount_end')}
@@ -277,7 +279,7 @@ def build_analytics(params):
         'previous_to': f'{previous_months[-1][0]}-{previous_months[-1][1]:02d}',
         'department': department or None, 'has_data': has_data,
         'summary': current, 'comparison': comparison, 'monthly': rows,
-        'departments': _departments(months, department), 'leave_utilisation': _leave_utilisation(department),
+        'departments': _departments(months, department, company_id), 'leave_utilisation': _leave_utilisation(department, company_id),
         'notes': notes,
     }
 
@@ -286,6 +288,6 @@ def build_analytics(params):
 @permission_classes([IsAuthenticated, IsAdminUserRole])
 def analytics_report(request):
     try:
-        return Response(build_analytics(request.query_params))
+        return Response(build_analytics(request.query_params, request.user.userprofile.company_id))
     except AnalyticsError as error:
         return Response({'detail': str(error)}, status=status.HTTP_400_BAD_REQUEST)

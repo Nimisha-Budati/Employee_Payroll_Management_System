@@ -8,6 +8,7 @@ from django.utils import timezone
 from rest_framework.test import APIClient
 
 from accounts.models import AttendanceRecord, AuditLog, Employee, Holiday, LeaveRequest, UserProfile, WorkFromHomeRequest
+from accounts.test_utils import test_company
 
 from .calculator import attendance_summary, compute_amounts
 from .models import Payslip, SalaryStructure
@@ -17,9 +18,9 @@ JUNE_2025_PRESENT = [date(2025, 6, d) for d in (2, 3, 4, 5, 6, 9, 10, 11, 12, 13
 
 def make_employee(username, employee_id, joining=date(2024, 1, 1), department='Engineering'):
     user = User.objects.create_user(username, f'{username}@example.com', 'EmployeePass123!', first_name=username.title())
-    UserProfile.objects.create(user=user, role='EMPLOYEE')
+    UserProfile.objects.create(user=user, role='EMPLOYEE', company=test_company())
     employee = Employee.objects.create(
-        user=user, employee_id=employee_id, phone='9876543210', department=department,
+        user=user, company=test_company(), employee_id=employee_id, phone='9876543210', department=department,
         designation='Developer', joining_date=joining,
     )
     return employee
@@ -56,7 +57,7 @@ def check_in(user, day):
 class CalculationTests(TestCase):
     def setUp(self):
         self.employee = make_employee('asha', 'EMP001')
-        Holiday.objects.create(name='Mid-month holiday', date=date(2025, 6, 19))
+        Holiday.objects.create(company=test_company(), name='Mid-month holiday', date=date(2025, 6, 19))
         for day in JUNE_2025_PRESENT:
             check_in(self.employee.user, day)
 
@@ -128,7 +129,7 @@ class PayrollApiTests(TestCase):
     def setUp(self):
         cache.clear()
         self.admin = User.objects.create_user('admin', 'admin@example.com', 'AdminPass123!')
-        UserProfile.objects.create(user=self.admin, role='ADMIN')
+        UserProfile.objects.create(user=self.admin, role='ADMIN', company=test_company())
         self.asha = make_employee('asha', 'EMP001')
         self.ravi = make_employee('ravi', 'EMP002')
         make_structure(self.asha.user)
@@ -294,7 +295,7 @@ class SecurityTests(TestCase):
     def setUp(self):
         cache.clear()
         self.admin = User.objects.create_user('admin', 'admin@example.com', 'AdminPass123!')
-        UserProfile.objects.create(user=self.admin, role='ADMIN')
+        UserProfile.objects.create(user=self.admin, role='ADMIN', company=test_company())
         self.employee = make_employee('asha', 'EMP001')
 
     def test_csrf_is_enforced_on_state_changing_api_calls(self):
@@ -363,7 +364,7 @@ class SecurityTests(TestCase):
 class EmployeeManagementTests(TestCase):
     def setUp(self):
         self.admin = User.objects.create_user('admin', 'admin@example.com', 'AdminPass123!')
-        UserProfile.objects.create(user=self.admin, role='ADMIN')
+        UserProfile.objects.create(user=self.admin, role='ADMIN', company=test_company())
         self.client = APIClient()
         self.client.force_authenticate(self.admin)
 
@@ -422,7 +423,7 @@ class EmployeeManagementTests(TestCase):
 
     def test_self_registered_account_can_be_onboarded(self):
         user = User.objects.create_user('selfie', 'selfie@example.com', 'Str0ng!Passw0rd')
-        UserProfile.objects.create(user=user, role='EMPLOYEE')
+        UserProfile.objects.create(user=user, role='EMPLOYEE', company=test_company())
         meta = self.client.get('/api/employees/meta/').json()
         self.assertEqual([item['username'] for item in meta['pending_accounts']], ['selfie'])
         response = self.client.post('/api/employees/', {
@@ -434,7 +435,7 @@ class EmployeeManagementTests(TestCase):
         self.assertEqual(self.client.get('/api/employees/meta/').json()['pending_accounts'], [])
 
     def test_admin_cannot_deactivate_self(self):
-        employee = Employee.objects.create(user=self.admin, employee_id='ADM1', phone='9876543210', department='HR',
+        employee = Employee.objects.create(user=self.admin, company=test_company(), employee_id='ADM1', phone='9876543210', department='HR',
                                            designation='Head', joining_date=date(2024, 1, 1))
         self.assertEqual(self.client.delete(f'/api/employees/{employee.pk}/').status_code, 400)
 

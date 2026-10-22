@@ -197,7 +197,7 @@ def analyse_employee(employee, structure, year, month, current, previous):
             reasons.append('Salary components changed: ' + '; '.join(details) + '. ' + _structure_text(structure))
         if previous.working_days != current.working_days:
             start, end = month_bounds(year, month)
-            holidays = list(Holiday.objects.filter(date__range=(start, end)).order_by('date'))
+            holidays = list(Holiday.objects.filter(company=employee.company, date__range=(start, end)).order_by('date'))
             text = f'Working days {previous.working_days} → {current.working_days}'
             if holidays:
                 text += ' (holidays this month: ' + ', '.join(f'{h.name} on {h.date:%d %b}' for h in holidays) + ')'
@@ -249,27 +249,27 @@ def analyse_employee(employee, structure, year, month, current, previous):
     return flags, reasons
 
 
-def latest_review(year, month):
-    return PayrollReview.objects.select_related('reviewed_by').filter(year=year, month=month).first()
+def latest_review(year, month, company_id=None):
+    return PayrollReview.objects.select_related('reviewed_by').filter(year=year, month=month, company_id=company_id).first()
 
 
-def review_is_current(year, month, drafts=None):
+def review_is_current(year, month, drafts=None, company_id=None):
     """True when the latest review is newer than every draft change for the month."""
-    review = latest_review(year, month)
+    review = latest_review(year, month, company_id)
     if review is None:
         return False
-    drafts = drafts if drafts is not None else Payslip.objects.filter(year=year, month=month, status=Payslip.DRAFT)
+    drafts = drafts if drafts is not None else Payslip.objects.filter(year=year, month=month, status=Payslip.DRAFT, employee__userprofile__company_id=company_id)
     last_change = drafts.aggregate(value=Max('updated_at'))['value']
     return last_change is None or last_change <= review.reviewed_at
 
 
-def build_variance(year, month, flagged_only=False):
+def build_variance(year, month, flagged_only=False, company_id=None):
     prev_year, prev_month = previous_period(year, month)
-    current = {slip.employee_id: slip for slip in Payslip.objects.filter(year=year, month=month)}
-    previous = {slip.employee_id: slip for slip in Payslip.objects.filter(year=prev_year, month=prev_month)}
+    current = {slip.employee_id: slip for slip in Payslip.objects.filter(year=year, month=month, employee__userprofile__company_id=company_id)}
+    previous = {slip.employee_id: slip for slip in Payslip.objects.filter(year=prev_year, month=prev_month, employee__userprofile__company_id=company_id)}
     # Everyone paid in either month, so the totals reconcile (leavers are listed as information).
     user_ids = set(current) | set(previous)
-    employees = {employee.user_id: employee for employee in Employee.objects.select_related('user').filter(user_id__in=user_ids)}
+    employees = {employee.user_id: employee for employee in Employee.objects.select_related('user').filter(user_id__in=user_ids, company_id=company_id)}
     structures = {structure.employee_id: structure for structure in
                   SalaryStructure.objects.select_related('updated_by').filter(employee_id__in=user_ids)}
 
@@ -308,8 +308,8 @@ def build_variance(year, month, flagged_only=False):
     for field in ('gross_earnings', 'total_deductions', 'net_salary', 'overtime_pay', 'bonus', 'lop_deduction'):
         before, after = total(previous.values(), field), total(current.values(), field)
         totals[field] = {'previous': before, 'current': after, 'change': after - before, 'percent': percent(before, after)}
-    drafts = Payslip.objects.filter(year=year, month=month, status=Payslip.DRAFT)
-    review = latest_review(year, month)
+    drafts = Payslip.objects.filter(year=year, month=month, status=Payslip.DRAFT, employee__userprofile__company_id=company_id)
+    review = latest_review(year, month, company_id)
     data = {
         'year': year, 'month': month, 'period': _label(year, month),
         'previous_period': _label(prev_year, prev_month),
@@ -325,7 +325,7 @@ def build_variance(year, month, flagged_only=False):
         'review': {
             'reviewed_at': review.reviewed_at, 'reviewed_by': (review.reviewed_by.get_full_name() or review.reviewed_by.username)
             if review.reviewed_by else '', 'note': review.note, 'flagged_count': review.flagged_count,
-            'is_current': review_is_current(year, month, drafts),
+            'is_current': review_is_current(year, month, drafts, company_id),
         } if review else None,
         'rows': [row for row in rows if row['anomaly']] if flagged_only else rows,
     }
@@ -348,7 +348,8 @@ def payroll_variance(request):
     period = _period_params(request.query_params)
     if period is None:
         return Response({'detail': 'Provide a valid year and month.'}, status=status.HTTP_400_BAD_REQUEST)
-    return Response(build_variance(*period, flagged_only=request.query_params.get('flagged') == 'true'))
+    company_id = request.user.userprofile.company_id
+    return Response(build_variance(*period, flagged_only=request.query_params.get('flagged') == 'true', company_id=company_id))
 
 
 @api_view(['POST'])
@@ -358,17 +359,18 @@ def payroll_variance_review(request):
     if period is None:
         return Response({'detail': 'Provide a valid year and month.'}, status=status.HTTP_400_BAD_REQUEST)
     year, month = period
-    drafts = Payslip.objects.filter(year=year, month=month, status=Payslip.DRAFT)
+    company_id = request.user.userprofile.company_id
+    drafts = Payslip.objects.filter(year=year, month=month, status=Payslip.DRAFT, employee__userprofile__company_id=company_id)
     if not drafts.exists():
         return Response({'detail': 'There are no draft payslips to review for this month.'}, status=status.HTTP_400_BAD_REQUEST)
-    data = build_variance(year, month)
+    data = build_variance(year, month, company_id=company_id)
     note = str(request.data.get('note', '')).strip()[:300]
     flagged = data['counts']['flagged']
     if flagged and not note and request.data.get('acknowledge_flags') is not True:
         return Response({'detail': f'{flagged} employee(s) are flagged. Confirm that you checked them (or add a note) to record the review.',
                          'code': 'acknowledge_flags'}, status=status.HTTP_400_BAD_REQUEST)
     review = PayrollReview.objects.create(
-        year=year, month=month, reviewed_by=request.user, draft_count=data['counts']['drafts'], flagged_count=flagged,
+        company_id=company_id, year=year, month=month, reviewed_by=request.user, draft_count=data['counts']['drafts'], flagged_count=flagged,
         net_total=data['totals']['net_salary']['current'], note=note,
     )
     record_audit(request, 'REVIEW', 'PayrollReview', f'{year}-{month:02d}',

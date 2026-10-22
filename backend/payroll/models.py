@@ -3,6 +3,7 @@ from decimal import Decimal
 from django.contrib.auth.models import User
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
+from accounts.models import Company
 
 MONEY = {'max_digits': 12, 'decimal_places': 2}
 NON_NEGATIVE = [MinValueValidator(Decimal('0'))]
@@ -112,6 +113,7 @@ class Payslip(models.Model):
 class PayrollReview(models.Model):
     """An administrator's sign-off of the variance preview for a payroll month (required before finalising)."""
 
+    company = models.ForeignKey(Company, null=True, on_delete=models.CASCADE, related_name='payroll_reviews')
     year = models.PositiveSmallIntegerField()
     month = models.PositiveSmallIntegerField(validators=[MinValueValidator(1), MaxValueValidator(12)])
     reviewed_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='+')

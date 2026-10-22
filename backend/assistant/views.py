@@ -90,7 +90,7 @@ def _resolve_subject(request, feature, data):
         return None
     if not is_admin_user(request.user) or feature not in (AIConversation.SALARY, AIConversation.ATTENDANCE):
         raise PermissionError('You can only ask about your own records.')
-    subject = User.objects.filter(pk=raw, userprofile__role='EMPLOYEE').first() if str(raw).isdigit() else None
+    subject = User.objects.filter(pk=raw, userprofile__role='EMPLOYEE', userprofile__company_id=request.user.userprofile.company_id).first() if str(raw).isdigit() else None
     if subject is None:
         raise LookupError('Employee not found.')
     return subject
@@ -277,11 +277,11 @@ def _generate(conversation, question, retrieval):
     return gemini.generate(instruction, turns), topics
 
 
-def _fallback(question, retrieval):
+def _fallback(question, retrieval, company=None):
     """A data-only answer built by PayrollPro itself, or None when there is nothing reliable to show."""
     if retrieval.fallback:
         return '\n\n'.join([FALLBACK_NOTE] + retrieval.fallback), list(retrieval.sources)
-    topics, score = guide.retrieve(question, limit=1)
+    topics, score = guide.retrieve(question, limit=1, company=company)
     if topics and score >= GENERAL_FALLBACK_SCORE:
         topic = topics[0]
         note = '_The AI service is not available right now, so here is the matching section of the PayrollPro guide._'
@@ -310,7 +310,7 @@ def answer_question(request, conversation, question):
             return user_message, reply, ''
         except gemini.AIServiceError as exc:
             error = exc
-    fallback = _fallback(question, retrieval)
+    fallback = _fallback(question, retrieval, company=conversation.user.userprofile.company)
     if fallback is None:
         raise error
     user_message, reply = _store(conversation, question, fallback[0], 'DATA', fallback[1])
@@ -365,7 +365,7 @@ def _insight_target(request, data):
 
 def _stats_for(request, scope, subject, start, end):
     if scope == 'COMPANY':
-        return company_attendance_stats(start, end)
+        return company_attendance_stats(start, end, request.user.userprofile.company_id)
     return attendance_stats(subject or request.user, start, end)
 
 
@@ -438,7 +438,7 @@ def attendance_insights(request):
 @api_view(['GET', 'PUT'])
 @permission_classes([IsAuthenticated, IsAdminUserRole])
 def knowledge(request):
-    kb = AIKnowledgeBase.load()
+    kb = AIKnowledgeBase.load(request.user.userprofile.company)
     if request.method == 'GET':
         return Response(KnowledgeSerializer(kb).data)
     serializer = KnowledgeSerializer(kb, data=request.data, partial=True)

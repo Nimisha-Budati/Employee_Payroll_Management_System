@@ -10,7 +10,9 @@ class IsAdminUserRole(permissions.BasePermission):
     message = 'Access denied. Administrator access is required.'
 
     def has_permission(self, request, view):
-        return is_admin_user(request.user)
+        if not is_admin_user(request.user):
+            return False
+        return UserProfile.objects.filter(user=request.user, company__isnull=False).exists()
 
 
 class IsEmployeeUserRole(permissions.BasePermission):

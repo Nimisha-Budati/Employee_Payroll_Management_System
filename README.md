@@ -34,7 +34,8 @@ PayrollPro is a web application for running a small company's HR and payroll in 
 | Separate admin and employee sign-in | The login page has an *Administrator* / *Employee* switch. Signing in with the wrong type is refused. |
 | Username **or** email login | Either one can be used in the username field. |
 | Remember me | Keeps the session for 7 days (configurable); otherwise it ends when the browser closes. |
-| Self-registration | Anyone can register an **Employee** account. Admin accounts cannot be created publicly. An administrator then completes the employee record (see *Onboarding*). |
+| Company registration | A company administrator registers the organization and its first administrator. Company settings, leave types, attendance settings and AI knowledge are created for that tenant. |
+| Employee self-registration | Anyone can register an **unassigned Employee** account. A company administrator can attach the account during onboarding; public registration cannot create administrators. |
 | Forgot password with OTP | A 6-digit code is emailed (printed to the server console when email is not configured). It expires in 10 minutes and allows 5 attempts. After verifying, the user sets a new password. |
 | Change password | From **Settings**, using the current password. The session stays signed in. |
 | Password strength | Django's validators: minimum length, not too common, not all numbers, not similar to the username/email. |
@@ -453,6 +454,10 @@ The "Continue with Google" button works only after you add Google credentials. W
 
 ## 7. Getting started as an administrator
 
+Register the organization from **Register a company** on the sign-in page. The first account becomes that company's administrator. The administrator can then add employees or attach employee accounts that registered themselves. Company data and settings are isolated by tenant.
+
+Existing installations receive a `Legacy organization (review ownership)` tenant during migration when they contain data. Review ownership and move records to the correct company before inviting multiple organizations. Back up the database before applying migrations.
+
 1. Sign in with the superuser account and choose **Administrator**.
 2. **Employees:** add employees, or complete the records of accounts that registered themselves (listed as pending).
 3. **Salary structures:** set each employee's pay. Employees without one are skipped in payroll.
@@ -631,4 +636,4 @@ Reminders can be scheduled daily (for example with Windows Task Scheduler):
 python manage.py send_reminders
 ```
 
-The suite (192 tests) covers the payroll variance review and the review required before finalising, attendance correction requests, the team calendar, onboarding checklists, document expiry and reminders, notification preferences, audit filters and append-only audit entries, analytics and its Excel export, the admin-controlled leave policy (types, limits, leave year, carry forward, adjustments, validation, cancellation), AI chat rename/pin/search, authentication and permissions, employees, leave, attendance and late minutes, shifts, overtime approval and its payroll integration, DA/bonus calculations, documents, Google sign-in, notifications with expiry, audit coverage, Excel exports, the AI assistants (with the Gemini HTTP call stubbed), and the payroll calculator, runs, adjustments, finalisation, PDFs, exports and reports. Uploaded test files go to a temporary folder, not `backend/media/`.
+The suite (203 tests) covers the payroll variance review and the review required before finalising, attendance correction requests, the team calendar, onboarding checklists, document expiry and reminders, notification preferences, audit filters and append-only audit entries, analytics and its Excel export, the admin-controlled leave policy (types, limits, leave year, carry forward, adjustments, validation, cancellation), AI chat rename/pin/search, authentication and permissions, employees, leave, attendance and late minutes, shifts, overtime approval and its payroll integration, DA/bonus calculations, documents, Google sign-in, notifications with expiry, audit coverage, Excel exports, the AI assistants (with the Gemini HTTP call stubbed), and the payroll calculator, runs, adjustments, finalisation, PDFs, exports and reports. Uploaded test files go to a temporary folder, not `backend/media/`.

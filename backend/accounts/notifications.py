@@ -45,6 +45,9 @@ def notify_user(recipient, kind, title, message, target_url='', actor=None):
 
 def _bulk_notify(recipients, kind, title, message, target_url, actor):
     if actor is not None:
+        company_id = getattr(getattr(actor, 'userprofile', None), 'company_id', None)
+        recipients = recipients.filter(userprofile__company_id=company_id)
+    if actor is not None:
         recipients = recipients.exclude(pk=actor.pk)
     recipients = list(recipients.distinct())
     muted = _muted_user_ids(kind, [user.pk for user in recipients])
@@ -67,10 +70,19 @@ def admin_users():
     )
 
 
-def notify_role(role, kind, title, message, target_url='', actor=None):
+def notify_role(role, kind, title, message, target_url='', actor=None, company_id=None):
     recipients = User.objects.filter(is_active=True, userprofile__role=role)
+    if company_id is None and actor is not None:
+        company_id = getattr(getattr(actor, 'userprofile', None), 'company_id', None)
+    if company_id is not None:
+        recipients = recipients.filter(userprofile__company_id=company_id)
     return _bulk_notify(recipients, kind, title, message, target_url, actor)
 
 
-def notify_admins(kind, title, message, target_url='', actor=None):
-    return _bulk_notify(admin_users(), kind, title, message, target_url, actor)
+def notify_admins(kind, title, message, target_url='', actor=None, company_id=None):
+    if company_id is None and actor is not None:
+        company_id = getattr(getattr(actor, 'userprofile', None), 'company_id', None)
+    recipients = admin_users()
+    if company_id is not None:
+        recipients = recipients.filter(userprofile__company_id=company_id)
+    return _bulk_notify(recipients, kind, title, message, target_url, actor)

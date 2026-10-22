@@ -509,8 +509,8 @@ def onboarding_retrieval(result, person):
     result.fallback.append(f'**Your onboarding:** {state} ({data["done"]} of {data["total"]} done)\n' + '\n'.join(lines[1:]))
 
 
-def holiday_retrieval(result):
-    holidays = Holiday.objects.filter(date__gte=timezone.localdate()).order_by('date')[:6]
+def holiday_retrieval(result, company):
+    holidays = Holiday.objects.filter(company=company, date__gte=timezone.localdate()).order_by('date')[:6]
     lines = ['UPCOMING HOLIDAYS:'] + ([f'- {h.date:%a %d %b %Y}: {h.name} ({h.get_holiday_type_display()})' for h in holidays] or ['- None scheduled.'])
     result.blocks.append('\n'.join(lines))
     result.sources.append('Holiday calendar')
@@ -578,5 +578,5 @@ def retrieve(conversation, question):
         if ONBOARDING in intents:
             onboarding_retrieval(result, person)
     if HOLIDAYS in intents:
-        holiday_retrieval(result)
+        holiday_retrieval(result, user.userprofile.company)
     return result

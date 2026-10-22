@@ -36,15 +36,15 @@ def tokens(text):
     return out
 
 
-def _entitlements_text():
+def _entitlements_text(company=None):
     """The current leave policy from the database (administrators change it on the Leave policy page)."""
     from accounts.leave_policy import leave_year_label, leave_year_of, policy_settings
     from accounts.models import LeaveType
     from django.utils import timezone
 
-    rules = policy_settings()
+    rules = policy_settings(company)
     lines = []
-    for leave_type in LeaveType.objects.filter(is_active=True):
+    for leave_type in LeaveType.objects.filter(company=company, is_active=True):
         limit = f'{leave_type.annual_days} days per leave year' if leave_type.annual_days is not None else 'no annual limit'
         carry = f'; up to {leave_type.max_carry_forward_days} unused days can be carried forward' if leave_type.allow_carry_forward else ''
         lines.append(f'- **{leave_type.name}**: {limit}, {"paid" if leave_type.is_paid else "unpaid (loss of pay)"}{carry}.'
@@ -78,14 +78,14 @@ def _guide_sections():
     return sections
 
 
-def sections():
+def sections(company=None):
     """All verified topics with dynamic values filled in, plus administrator-written topics."""
     result = []
     for section in _guide_sections():
-        body = section['body'].replace('{leave_entitlements}', _entitlements_text())
+        body = section['body'].replace('{leave_entitlements}', _entitlements_text(company))
         result.append({'title': section['title'], 'body': body, 'source': 'PayrollPro guide',
                        'tokens': tokens(f"{section['title']} {section['keywords']}"), 'body_tokens': tokens(body)})
-    kb = AIKnowledgeBase.load()
+    kb = AIKnowledgeBase.load(company)
     for field, title, extra in (
         ('company_overview', 'Company overview (written by administrators)', 'company organisation office timing contact hr about'),
         ('leave_policy', 'Organisation leave policy (written by administrators)', 'leave policy rule notice sick casual earned'),
@@ -98,11 +98,11 @@ def sections():
     return result
 
 
-def retrieve(question, limit=3, always=()):
+def retrieve(question, limit=3, always=(), company=None):
     """Return (best topics, best score). ``always`` forces topics with these titles or KB fields to be included."""
     query = tokens(question)
     scored = []
-    for section in sections():
+    for section in sections(company):
         score = 3 * len(query & section['tokens']) + len(query & section['body_tokens'])
         forced = section['title'] in always or section.get('field') in always
         if score or forced:

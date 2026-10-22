@@ -4,12 +4,14 @@ from decimal import ROUND_HALF_UP, Decimal
 from django.contrib.auth.models import User
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
+from accounts.models import Company
 
 
 class Shift(models.Model):
     """A named working pattern, e.g. "General 09:30-18:30". End before start means the shift crosses midnight."""
 
-    name = models.CharField(max_length=60, unique=True)
+    company = models.ForeignKey(Company, null=True, on_delete=models.CASCADE, related_name='shifts')
+    name = models.CharField(max_length=60)
     start_time = models.TimeField()
     end_time = models.TimeField()
     grace_minutes = models.PositiveSmallIntegerField(default=10, validators=[MaxValueValidator(240)])
@@ -24,6 +26,10 @@ class Shift(models.Model):
 
     class Meta:
         ordering = ['start_time', 'name']
+        constraints = [
+            models.UniqueConstraint(fields=['company', 'name'], name='one_shift_name_per_company'),
+            models.UniqueConstraint(fields=['company'], condition=models.Q(is_default=True), name='one_default_shift_per_company'),
+        ]
 
     def __str__(self):
         return f'{self.name} ({self.start_time:%H:%M}-{self.end_time:%H:%M})'

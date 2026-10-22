@@ -182,8 +182,8 @@ def _dept(user):
 
 # --- reports -------------------------------------------------------------------
 
-def employee_report(params, wb):
-    employees = Employee.objects.select_related('user', 'user__salary_structure').order_by('employee_id')
+def employee_report(params, wb, company_id=None):
+    employees = Employee.objects.filter(company_id=company_id).select_related('user', 'user__salary_structure').order_by('employee_id')
     if params.get('status') in ('ACTIVE', 'INACTIVE'):
         employees = employees.filter(status=params['status'])
     if params.get('department'):
@@ -232,10 +232,10 @@ def employee_report(params, wb):
     return count, filters
 
 
-def attendance_report(params, wb):
+def attendance_report(params, wb, company_id=None):
     today = timezone.localdate()
     start, end = _range(params, today.replace(day=1), today)
-    records = AttendanceRecord.objects.select_related('employee', 'employee__employee').filter(date__range=(start, end))
+    records = AttendanceRecord.objects.select_related('employee', 'employee__employee').filter(employee__userprofile__company_id=company_id, date__range=(start, end))
     if params.get('department'):
         records = records.filter(employee__employee__department__iexact=params['department'])
     user = _employee_user(params)
@@ -276,9 +276,9 @@ def attendance_report(params, wb):
     return count, filters
 
 
-def leave_report(params, wb):
+def leave_report(params, wb, company_id=None):
     start, end = _range(params)
-    leaves = LeaveRequest.objects.select_related('employee', 'employee__employee', 'policy')
+    leaves = LeaveRequest.objects.select_related('employee', 'employee__employee', 'policy').filter(employee__userprofile__company_id=company_id)
     if start:
         leaves = leaves.filter(end_date__gte=start)
     if end:
@@ -310,7 +310,7 @@ def leave_report(params, wb):
 
     from accounts.models import LeaveType
 
-    types = list(LeaveType.objects.values_list('name', flat=True))
+    types = list(LeaveType.objects.filter(company_id=company_id).values_list('name', flat=True))
     types += sorted({item.leave_type for item in leaves} - set(types))
     per_employee = {}
     for item in leaves:
@@ -343,7 +343,7 @@ PAYROLL_COLUMNS = [
 ]
 
 
-def payroll_report(params, wb):
+def payroll_report(params, wb, company_id=None):
     try:
         year = int(params.get('year') or timezone.localdate().year)
         month = int(params['month']) if params.get('month') else None
@@ -351,7 +351,7 @@ def payroll_report(params, wb):
         raise ReportError('Provide a valid year and month.')
     if month is not None and not 1 <= month <= 12:
         raise ReportError('Provide a valid month.')
-    payslips = Payslip.objects.filter(year=year)
+    payslips = Payslip.objects.filter(employee__userprofile__company_id=company_id, year=year)
     if month:
         payslips = payslips.filter(month=month)
     if params.get('status') in (Payslip.DRAFT, Payslip.PAID):
@@ -389,10 +389,10 @@ def payroll_report(params, wb):
     return count, filters
 
 
-def overtime_report(params, wb):
+def overtime_report(params, wb, company_id=None):
     today = timezone.localdate()
     start, end = _range(params, today.replace(day=1), today)
-    records = OvertimeRecord.objects.select_related('employee', 'employee__employee', 'reviewed_by').filter(date__range=(start, end))
+    records = OvertimeRecord.objects.select_related('employee', 'employee__employee', 'reviewed_by').filter(employee__userprofile__company_id=company_id, date__range=(start, end))
     if params.get('status') in dict(OvertimeRecord.STATUS_CHOICES):
         records = records.filter(status=params['status'])
     if params.get('department'):
@@ -416,11 +416,11 @@ def overtime_report(params, wb):
     return count, filters
 
 
-def analytics_workbook(params, wb):
+def analytics_workbook(params, wb, company_id=None):
     from .analytics import AnalyticsError, build_analytics
 
     try:
-        data = build_analytics(params)
+        data = build_analytics(params, company_id)
     except AnalyticsError as error:
         raise ReportError(str(error))
     filters = _describe([('Months', f'{data["from"]} to {data["to"]}'), ('Department', data['department'] or 'All')])
@@ -473,7 +473,7 @@ def excel_report(request, kind):
     wb = Workbook()
     wb.remove(wb.active)
     try:
-        count, filters = builder(request.query_params, wb)
+        count, filters = builder(request.query_params, wb, request.user.userprofile.company_id)
     except ReportError as error:
         return Response({'detail': str(error)}, status=status.HTTP_400_BAD_REQUEST)
     wb.properties.creator = settings.COMPANY_NAME

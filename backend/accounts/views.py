@@ -15,7 +15,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from .audit import record_audit
-from .models import LeaveType, AuditLog, Announcement, AttendanceRecord, AttendanceSettings, ChatConversation, ChatMessage, Notification, NotificationBroadcast, UserProfile, LeaveRequest, Employee, EmployeeDocument, Holiday, WorkFromHomeRequest
+from .models import Company, LeaveType, AuditLog, Announcement, AttendanceRecord, AttendanceSettings, ChatConversation, ChatMessage, Notification, NotificationBroadcast, UserProfile, LeaveRequest, Employee, EmployeeDocument, Holiday, WorkFromHomeRequest
 from .onboarding import refresh_for_user as _refresh_onboarding
 from .notifications import optional_kinds as _optional_kinds, notify_admins as _notify_admins, notify_role as _notify_role, notify_user as _notify_user
 from .pagination import maybe_paginate
@@ -28,6 +28,47 @@ from workforce.services import late_minutes as _late_minutes, scheduled_start as
 
 # --- LEAVE MANAGEMENT APIs ---
 
+def _company_id(user):
+    return UserProfile.objects.filter(user=user).values_list('company_id', flat=True).first()
+
+
+def _company_users(company_id):
+    return User.objects.filter(userprofile__company_id=company_id)
+
+
+def _company_employees(company_id):
+    return Employee.objects.filter(company_id=company_id)
+
+
+@api_view(['GET', 'PUT'])
+@permission_classes([IsAuthenticated])
+def company_profile(request):
+    profile = UserProfile.objects.select_related('company').filter(user=request.user).first()
+    if profile is None or profile.company_id is None:
+        return Response({'detail': 'This account is not assigned to a company.'}, status=status.HTTP_403_FORBIDDEN)
+    company = profile.company
+    if request.method == 'GET':
+        return Response({'name': company.name, 'email': company.email, 'phone': company.phone, 'address': company.address})
+    if not _is_admin(request.user):
+        return Response({'detail': 'Only company administrators can update company details.'}, status=status.HTTP_403_FORBIDDEN)
+    name = str(request.data.get('name', company.name)).strip()
+    email = str(request.data.get('email', company.email)).strip().lower()
+    phone = str(request.data.get('phone', company.phone)).strip()
+    address = str(request.data.get('address', company.address)).strip()
+    if not name or len(name) > 160 or len(phone) > 20:
+        return Response({'detail': 'Enter a valid company name and contact number.'}, status=status.HTTP_400_BAD_REQUEST)
+    from django.core.validators import validate_email
+    from django.core.exceptions import ValidationError
+    try:
+        validate_email(email)
+    except ValidationError:
+        return Response({'email': ['Enter a valid email address.']}, status=status.HTTP_400_BAD_REQUEST)
+    if Company.objects.filter(email__iexact=email).exclude(pk=company.pk).exists():
+        return Response({'email': ['A company with this email already exists.']}, status=status.HTTP_400_BAD_REQUEST)
+    company.name, company.email, company.phone, company.address = name, email, phone, address
+    company.save(update_fields=['name', 'email', 'phone', 'address'])
+    return Response({'name': company.name, 'email': company.email, 'phone': company.phone, 'address': company.address})
+
 @api_view(['GET', 'POST'])
 @permission_classes([IsAuthenticated])
 def leave_list_create(request):
@@ -35,7 +76,7 @@ def leave_list_create(request):
     is_admin = _is_admin(user)
 
     if request.method == 'GET':
-        leaves = LeaveRequest.objects.select_related('employee', 'employee__employee')
+        leaves = LeaveRequest.objects.select_related('employee', 'employee__employee').filter(employee__userprofile__company_id=_company_id(user))
         if not is_admin:
             leaves = leaves.filter(employee=user)
         params = request.query_params
@@ -54,7 +95,7 @@ def leave_list_create(request):
             )
         return maybe_paginate(request, leaves.order_by('-applied_at', '-id'), LeaveRequestSerializer)
 
-    serializer = LeaveRequestSerializer(data=request.data, context={'request': request})
+    serializer = LeaveRequestSerializer(data=request.data, context={'request': request, 'company_id': _company_id(user)})
     if serializer.is_valid():
         leave_request = serializer.save(employee=user)
         _notify_admins(
@@ -77,10 +118,10 @@ def leave_balance(request):
     if requested:
         if not _is_admin(request.user):
             return Response({'detail': 'You can only view your own leave balance.'}, status=status.HTTP_403_FORBIDDEN)
-        target = User.objects.filter(pk=requested).first() if str(requested).isdigit() else None
+        target = _company_users(_company_id(request.user)).filter(pk=requested, userprofile__role='EMPLOYEE').first() if str(requested).isdigit() else None
         if target is None:
             return Response({'detail': 'Employee not found.'}, status=status.HTTP_404_NOT_FOUND)
-    rules = _leave_rules()
+    rules = _leave_rules(Company.objects.filter(pk=_company_id(request.user)).first())
     try:
         year = int(request.query_params.get('year') or _leave_year_of(timezone.localdate(), rules))
     except ValueError:
@@ -95,7 +136,7 @@ def leave_balance(request):
 def leave_cancel(request, pk):
     """An employee cancels their own pending leave request; it then no longer counts towards any balance."""
     with transaction.atomic():
-        leave_req = LeaveRequest.objects.select_for_update().filter(pk=pk, employee=request.user).first()
+        leave_req = LeaveRequest.objects.select_for_update().filter(pk=pk, employee=request.user, employee__userprofile__company_id=_company_id(request.user)).first()
         if leave_req is None:
             return Response({'detail': 'Leave request not found.'}, status=status.HTTP_404_NOT_FOUND)
         if leave_req.status != 'PENDING':
@@ -117,7 +158,7 @@ def leave_type_list_create(request):
     from django.db.models import Count
 
     if request.method == 'GET':
-        types = LeaveType.objects.all()
+        types = LeaveType.objects.filter(company_id=_company_id(request.user))
         if not (_is_admin(request.user) and request.query_params.get('all') == 'true'):
             types = types.filter(is_active=True)
         if _is_admin(request.user):
@@ -125,10 +166,10 @@ def leave_type_list_create(request):
         return Response(LeaveTypeSerializer(types.order_by('sort_order', 'name'), many=True).data)
     if not _is_admin(request.user):
         return Response({'detail': 'Only administrators can manage leave types.'}, status=status.HTTP_403_FORBIDDEN)
-    serializer = LeaveTypeSerializer(data=request.data)
+    serializer = LeaveTypeSerializer(data=request.data, context={'company_id': _company_id(request.user)})
     if not serializer.is_valid():
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-    leave_type = serializer.save()
+    leave_type = serializer.save(company_id=_company_id(request.user))
     record_audit(request, 'CREATE', 'LeaveType', leave_type.pk, f'Created leave type {_describe_leave_type(leave_type)}.')
     return Response(LeaveTypeSerializer(leave_type).data, status=status.HTTP_201_CREATED)
 
@@ -142,7 +183,7 @@ def _describe_leave_type(leave_type):
 @api_view(['GET', 'PUT', 'PATCH', 'DELETE'])
 @permission_classes([IsAuthenticated, IsAdminUserRole])
 def leave_type_detail(request, pk):
-    leave_type = LeaveType.objects.filter(pk=pk).first()
+    leave_type = LeaveType.objects.filter(pk=pk, company_id=_company_id(request.user)).first()
     if leave_type is None:
         return Response({'detail': 'Leave type not found.'}, status=status.HTTP_404_NOT_FOUND)
     if request.method == 'GET':
@@ -157,7 +198,7 @@ def leave_type_detail(request, pk):
         return Response(status=status.HTTP_204_NO_CONTENT)
     before = _describe_leave_type(leave_type)
     old_name = leave_type.name
-    serializer = LeaveTypeSerializer(leave_type, data=request.data, partial=request.method == 'PATCH')
+    serializer = LeaveTypeSerializer(leave_type, data=request.data, partial=request.method == 'PATCH', context={'company_id': _company_id(request.user)})
     if not serializer.is_valid():
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     with transaction.atomic():
@@ -171,7 +212,7 @@ def leave_type_detail(request, pk):
 @api_view(['GET', 'PUT'])
 @permission_classes([IsAuthenticated])
 def leave_policy_settings(request):
-    rules = _leave_rules()
+    rules = _leave_rules(Company.objects.filter(pk=_company_id(request.user)).first())
     if request.method == 'GET':
         data = LeavePolicySettingsSerializer(rules).data
         current = _leave_year_of(timezone.localdate(), rules)
@@ -198,10 +239,11 @@ def leave_carry_forward(request):
         return Response({'year': ['Enter the leave year to carry days into.']}, status=status.HTTP_400_BAD_REQUEST)
     if not 2000 <= year <= 2100:
         return Response({'year': ['Enter a valid year.']}, status=status.HTTP_400_BAD_REQUEST)
-    if not LeaveType.objects.filter(allow_carry_forward=True, annual_days__isnull=False).exists():
+    company_id = _company_id(request.user)
+    if not LeaveType.objects.filter(company_id=company_id, allow_carry_forward=True, annual_days__isnull=False).exists():
         return Response({'detail': 'No leave type allows carrying days forward. Enable it on a leave type first.'},
                         status=status.HTTP_400_BAD_REQUEST)
-    written = _carry_forward(year, actor=request.user)
+    written = _carry_forward(year, actor=request.user, employees=_company_users(company_id).filter(userprofile__role='EMPLOYEE', employee__isnull=False))
     record_audit(request, 'CARRY_FORWARD', 'LeavePolicy', year, f'Carried unused leave from {year - 1} into {year} ({written} balance(s)).')
     return Response({'year': year, 'balances_written': written})
 
@@ -212,9 +254,10 @@ def leave_balance_adjust(request):
     """Administrators can add or remove days for one employee, leave type and leave year (with a note)."""
     from .models import EmployeeLeaveBalance
 
-    user = User.objects.filter(pk=request.data.get('employee_id'), userprofile__role='EMPLOYEE').first() \
+    company_id = _company_id(request.user)
+    user = User.objects.filter(pk=request.data.get('employee_id'), userprofile__role='EMPLOYEE', userprofile__company_id=company_id).first() \
         if str(request.data.get('employee_id', '')).isdigit() else None
-    leave_type = LeaveType.objects.filter(pk=request.data.get('leave_type_id')).first() \
+    leave_type = LeaveType.objects.filter(pk=request.data.get('leave_type_id'), company_id=company_id).first() \
         if str(request.data.get('leave_type_id', '')).isdigit() else None
     if user is None or leave_type is None:
         return Response({'detail': 'Employee or leave type not found.'}, status=status.HTTP_404_NOT_FOUND)
@@ -243,7 +286,7 @@ def leave_balance_adjust(request):
 @permission_classes([IsAuthenticated, IsAdminUserRole])
 def leave_update_status(request, pk):
     with transaction.atomic():
-        leave_req = LeaveRequest.objects.select_for_update().select_related('employee').filter(pk=pk).first()
+        leave_req = LeaveRequest.objects.select_for_update().select_related('employee').filter(pk=pk, employee__userprofile__company_id=_company_id(request.user)).first()
         if leave_req is None:
             return Response({'detail': 'Leave request not found.'}, status=status.HTTP_404_NOT_FOUND)
         if leave_req.status != 'PENDING':
@@ -279,15 +322,16 @@ def leave_update_status(request, pk):
 
 # --- EMPLOYEE MANAGEMENT APIs ---
 
-def _employee_queryset():
-    return Employee.objects.select_related('user', 'user__salary_structure')
+def _employee_queryset(user=None):
+    employees = Employee.objects.select_related('user', 'user__salary_structure')
+    return employees.filter(company_id=_company_id(user)) if user is not None else employees.none()
 
 
 @api_view(['GET', 'POST'])
 @permission_classes([IsAuthenticated, IsAdminUserRole])
 def employee_list_create(request):
     if request.method == 'GET':
-        employees = _employee_queryset().order_by('employee_id')
+        employees = _employee_queryset(request.user).order_by('employee_id')
         params = request.query_params
         if params.get('status') in ('ACTIVE', 'INACTIVE'):
             employees = employees.filter(status=params['status'])
@@ -312,7 +356,10 @@ def employee_list_create(request):
             employees = employees.order_by(('-' if ordering.startswith('-') else '') + key, 'employee_id')
         return maybe_paginate(request, employees, EmployeeSerializer)
 
-    serializer = EmployeeWriteSerializer(data=request.data)
+    company_id = _company_id(request.user)
+    if company_id is None:
+        return Response({'detail': 'Assign the administrator to a company before adding employees.'}, status=status.HTTP_403_FORBIDDEN)
+    serializer = EmployeeWriteSerializer(data=request.data, context={'company_id': company_id})
     if not serializer.is_valid():
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     data = serializer.validated_data
@@ -327,7 +374,7 @@ def employee_list_create(request):
                 first_name=data.get('first_name', ''),
                 last_name=data.get('last_name', ''),
             )
-            UserProfile.objects.create(user=user, role='EMPLOYEE', phone=data['phone'])
+            UserProfile.objects.create(user=user, role='EMPLOYEE', phone=data['phone'], company_id=company_id)
         else:
             updates = []
             for field in ('first_name', 'last_name'):
@@ -336,9 +383,10 @@ def employee_list_create(request):
                     updates.append(field)
             if updates:
                 user.save(update_fields=updates)
-            UserProfile.objects.filter(user=user).update(phone=data['phone'])
+            UserProfile.objects.filter(user=user).update(phone=data['phone'], company_id=company_id)
         employee = Employee.objects.create(
             user=user,
+            company_id=company_id,
             employee_id=data['employee_id'],
             phone=data['phone'],
             department=data['department'],
@@ -355,7 +403,7 @@ def employee_list_create(request):
         'employee-dashboard.html',
         actor=request.user,
     )
-    employee = _employee_queryset().get(pk=employee.pk)
+    employee = _employee_queryset(request.user).get(pk=employee.pk)
     return Response(EmployeeSerializer(employee).data, status=status.HTTP_201_CREATED)
 
 
@@ -363,9 +411,10 @@ def employee_list_create(request):
 @permission_classes([IsAuthenticated, IsAdminUserRole])
 def employee_meta(request):
     """Departments in use and self-registered accounts still waiting for an employee record."""
-    departments = list(Employee.objects.order_by('department').values_list('department', flat=True).distinct())
+    company_id = _company_id(request.user)
+    departments = list(_company_employees(company_id).order_by('department').values_list('department', flat=True).distinct())
     pending = User.objects.filter(
-        userprofile__role='EMPLOYEE', employee__isnull=True, is_active=True,
+        userprofile__role='EMPLOYEE', userprofile__company_id=company_id, employee__isnull=True, is_active=True,
     ).order_by('username')
     return Response({
         'departments': departments,
@@ -380,7 +429,7 @@ def employee_meta(request):
 @api_view(['GET', 'PUT', 'DELETE'])
 @permission_classes([IsAuthenticated, IsAdminUserRole])
 def employee_detail(request, pk):
-    employee = _employee_queryset().filter(pk=pk).first()
+    employee = _employee_queryset(request.user).filter(pk=pk).first()
     if employee is None:
         return Response({'detail': 'Employee not found.'}, status=status.HTTP_404_NOT_FOUND)
 
@@ -399,7 +448,7 @@ def employee_detail(request, pk):
             record_audit(request, 'DEACTIVATE', 'Employee', employee.pk, f'Deactivated employee {employee.employee_id}.', subject=employee.user)
         return Response({'detail': 'Employee deactivated.'})
 
-    serializer = EmployeeWriteSerializer(employee, data=request.data, partial=True)
+    serializer = EmployeeWriteSerializer(employee, data=request.data, partial=True, context={'company_id': _company_id(request.user)})
     if not serializer.is_valid():
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     data = serializer.validated_data
@@ -432,7 +481,7 @@ def employee_detail(request, pk):
             record_audit(request, action, 'Employee', employee.pk,
                          f'Updated {employee.employee_id}: {", ".join(sorted(set(changed)))}.', subject=user)
     _refresh_onboarding(employee.user)
-    return Response(EmployeeSerializer(_employee_queryset().get(pk=pk)).data)
+    return Response(EmployeeSerializer(_employee_queryset(request.user).get(pk=pk)).data)
 
 
 # --- DOCUMENT MANAGEMENT APIs ---
@@ -441,7 +490,7 @@ def employee_detail(request, pk):
 @permission_classes([IsAuthenticated])
 def document_list_create(request):
     if request.method == 'GET':
-        documents = EmployeeDocument.objects.select_related('employee')
+        documents = EmployeeDocument.objects.select_related('employee').filter(employee__userprofile__company_id=_company_id(request.user))
         params = request.query_params
         if not _is_admin(request.user):
             documents = documents.filter(employee=request.user)
@@ -461,7 +510,7 @@ def document_list_create(request):
         ordering = ('-uploaded_at',)
         if expiry in ('EXPIRED', 'EXPIRING', 'VALID', 'NONE', 'TRACKED'):
             today = timezone.localdate()
-            soon = today + timedelta(days=_reminder_settings().warning_window_days)
+            soon = today + timedelta(days=_reminder_settings(request.user).warning_window_days)
             documents = {
                 'EXPIRED': documents.filter(expiry_date__lt=today),
                 'EXPIRING': documents.filter(expiry_date__gte=today, expiry_date__lte=soon),
@@ -496,7 +545,7 @@ def document_list_create(request):
 @permission_classes([IsAuthenticated])
 def document_file(request, pk):
     """Stream a private document to its owner or an administrator."""
-    document = EmployeeDocument.objects.filter(pk=pk).first()
+    document = EmployeeDocument.objects.filter(pk=pk, employee__userprofile__company_id=_company_id(request.user)).first()
     if document is None or not (_is_admin(request.user) or document.employee_id == request.user.pk):
         raise Http404
     try:
@@ -512,7 +561,7 @@ def document_file(request, pk):
 @permission_classes([IsAuthenticated])
 def document_delete(request, pk):
     try:
-        document = EmployeeDocument.objects.get(pk=pk, employee=request.user)
+        document = EmployeeDocument.objects.get(pk=pk, employee=request.user, employee__userprofile__company_id=_company_id(request.user))
     except EmployeeDocument.DoesNotExist:
         return Response({'detail': 'Document not found.'}, status=status.HTTP_404_NOT_FOUND)
 
@@ -528,7 +577,7 @@ def document_delete(request, pk):
 @permission_classes([IsAuthenticated, IsAdminUserRole])
 def document_review(request, pk):
     try:
-        document = EmployeeDocument.objects.select_related('employee').get(pk=pk)
+        document = EmployeeDocument.objects.select_related('employee').get(pk=pk, employee__userprofile__company_id=_company_id(request.user))
     except EmployeeDocument.DoesNotExist:
         return Response({'detail': 'Document not found.'}, status=status.HTTP_404_NOT_FOUND)
 
@@ -564,10 +613,10 @@ def document_review(request, pk):
     return Response(EmployeeDocumentSerializer(document, context={'request': request}).data)
 
 
-def _reminder_settings():
+def _reminder_settings(user=None):
     from .models import ReminderSettings
 
-    return ReminderSettings.load()
+    return ReminderSettings.load(Company.objects.filter(pk=_company_id(user)).first() if user else None)
 
 
 def _parse_expiry(value):
@@ -584,7 +633,7 @@ def _parse_expiry(value):
 @permission_classes([IsAuthenticated, IsAdminUserRole])
 def document_expiry(request, pk):
     """Set, change or clear a document's expiry date (the review status is not affected)."""
-    document = EmployeeDocument.objects.select_related('employee').filter(pk=pk).first()
+    document = EmployeeDocument.objects.select_related('employee').filter(pk=pk, employee__userprofile__company_id=_company_id(request.user)).first()
     if document is None:
         return Response({'detail': 'Document not found.'}, status=status.HTTP_404_NOT_FOUND)
     expiry, error = _parse_expiry(request.data.get('expiry_date'))
@@ -624,13 +673,13 @@ def my_profile(request):
 @permission_classes([IsAuthenticated])
 def holiday_list_create(request):
     if request.method == 'GET':
-        return Response(HolidaySerializer(Holiday.objects.all(), many=True).data)
+        return Response(HolidaySerializer(Holiday.objects.filter(company_id=_company_id(request.user)), many=True).data)
 
     if not _is_admin(request.user):
         return Response({'detail': 'Only administrators can manage holidays.'}, status=status.HTTP_403_FORBIDDEN)
     serializer = HolidaySerializer(data=request.data)
     if serializer.is_valid():
-        holiday = serializer.save()
+        holiday = serializer.save(company_id=_company_id(request.user))
         record_audit(request, 'CREATE', 'Holiday', holiday.pk, f'Added holiday {holiday.name} on {holiday.date}.')
         _notify_role(
             'EMPLOYEE',
@@ -648,7 +697,7 @@ def holiday_list_create(request):
 @permission_classes([IsAuthenticated, IsAdminUserRole])
 def holiday_detail(request, pk):
     try:
-        holiday = Holiday.objects.get(pk=pk)
+        holiday = Holiday.objects.get(pk=pk, company_id=_company_id(request.user))
     except Holiday.DoesNotExist:
         return Response({'detail': 'Holiday not found.'}, status=status.HTTP_404_NOT_FOUND)
 
@@ -683,8 +732,9 @@ def holiday_detail(request, pk):
 
 # --- LOCATION-BASED ATTENDANCE APIs ---
 
-def _attendance_settings():
-    settings, _ = AttendanceSettings.objects.get_or_create(pk=1)
+def _attendance_settings(user):
+    company_id = _company_id(user)
+    settings, _ = AttendanceSettings.objects.get_or_create(company_id=company_id)
     return settings
 
 
@@ -710,7 +760,7 @@ def _provided_location(data):
 @api_view(['GET', 'PUT'])
 @permission_classes([IsAuthenticated, IsAdminUserRole])
 def attendance_settings(request):
-    settings = _attendance_settings()
+    settings = _attendance_settings(request.user)
     if request.method == 'GET':
         return Response(AttendanceSettingsSerializer(settings).data)
     serializer = AttendanceSettingsSerializer(settings, data=request.data)
@@ -726,7 +776,7 @@ def attendance_settings(request):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def attendance_status(request):
-    settings = _attendance_settings()
+    settings = _attendance_settings(request.user)
     today = timezone.localdate()
     record = AttendanceRecord.objects.filter(employee=request.user, date=today).first()
     return Response({
@@ -744,7 +794,7 @@ def attendance_mark(request, action):
         return Response({'detail': 'Administrators cannot mark employee attendance.'}, status=status.HTTP_403_FORBIDDEN)
     if action not in ('check-in', 'check-out'):
         return Response({'detail': 'Unsupported attendance action.'}, status=status.HTTP_400_BAD_REQUEST)
-    settings = _attendance_settings()
+    settings = _attendance_settings(request.user)
     if not settings.is_enabled or settings.latitude is None or settings.longitude is None:
         return Response({'detail': 'Attendance has not been configured by an administrator.'}, status=status.HTTP_409_CONFLICT)
 
@@ -798,7 +848,7 @@ def attendance_mark(request, action):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated, IsAdminUserRole])
 def attendance_list(request):
-    records = AttendanceRecord.objects.select_related('employee', 'employee__employee')
+    records = AttendanceRecord.objects.select_related('employee', 'employee__employee').filter(employee__userprofile__company_id=_company_id(request.user))
     params = request.query_params
     for param, lookup in (('date', 'date'), ('from', 'date__gte'), ('to', 'date__lte')):
         if params.get(param):
@@ -879,7 +929,7 @@ def attendance_history(request):
         limit = min(max(int(request.query_params.get('limit', 14)), 1), 90)
     except ValueError:
         limit = 14
-    records = AttendanceRecord.objects.filter(employee=request.user).select_related('employee')[:limit]
+    records = AttendanceRecord.objects.filter(employee=request.user, employee__userprofile__company_id=_company_id(request.user)).select_related('employee')[:limit]
     return Response(AttendanceRecordSerializer(records, many=True).data)
 
 
@@ -890,7 +940,7 @@ def attendance_history(request):
 def wfh_list_create(request):
     if request.method == 'GET':
         admin = _is_admin(request.user)
-        requests = WorkFromHomeRequest.objects.select_related('employee') if admin else WorkFromHomeRequest.objects.filter(employee=request.user)
+        requests = WorkFromHomeRequest.objects.select_related('employee').filter(employee__userprofile__company_id=_company_id(request.user)) if admin else WorkFromHomeRequest.objects.filter(employee=request.user)
         selected_status = request.query_params.get('status')
         if selected_status:
             requests = requests.filter(status=selected_status)
@@ -921,7 +971,7 @@ def wfh_list_create(request):
 @permission_classes([IsAuthenticated])
 def wfh_detail(request, pk):
     try:
-        item = WorkFromHomeRequest.objects.get(pk=pk)
+        item = WorkFromHomeRequest.objects.get(pk=pk, employee__userprofile__company_id=_company_id(request.user))
     except WorkFromHomeRequest.DoesNotExist:
         return Response({'detail': 'WFH request not found.'}, status=status.HTTP_404_NOT_FOUND)
     if request.method == 'DELETE':
@@ -966,7 +1016,7 @@ def wfh_detail(request, pk):
 @permission_classes([IsAuthenticated])
 def announcement_list_create(request):
     if request.method == 'GET':
-        announcements = Announcement.objects.select_related('created_by').all()
+        announcements = Announcement.objects.select_related('created_by').filter(company_id=_company_id(request.user))
         return Response(AnnouncementSerializer(announcements, many=True).data)
 
     if not _is_admin(request.user):
@@ -974,7 +1024,7 @@ def announcement_list_create(request):
 
     serializer = AnnouncementSerializer(data=request.data)
     if serializer.is_valid():
-        announcement = serializer.save(created_by=request.user)
+        announcement = serializer.save(created_by=request.user, company_id=_company_id(request.user))
         record_audit(request, 'CREATE', 'Announcement', announcement.pk, f'Published announcement "{announcement.title}".')
         _notify_role(
             'EMPLOYEE',
@@ -992,7 +1042,7 @@ def announcement_list_create(request):
 @permission_classes([IsAuthenticated, IsAdminUserRole])
 def announcement_detail(request, pk):
     try:
-        announcement = Announcement.objects.get(pk=pk)
+        announcement = Announcement.objects.get(pk=pk, company_id=_company_id(request.user))
     except Announcement.DoesNotExist:
         return Response({'detail': 'Announcement not found.'}, status=status.HTTP_404_NOT_FOUND)
 
@@ -1006,6 +1056,7 @@ def announcement_detail(request, pk):
 def chat_employee_list(request):
     employees = UserProfile.objects.select_related('user', 'user__employee').filter(
         role='EMPLOYEE',
+        company_id=_company_id(request.user),
         user__is_active=True,
     ).order_by('user__username')
     return Response(ChatEmployeeSerializer(employees, many=True).data)
@@ -1016,7 +1067,7 @@ def chat_employee_list(request):
 def chat_conversation_list_create(request):
     if request.method == 'GET':
         if _is_admin(request.user):
-            conversations = ChatConversation.objects.filter(administrator=request.user)
+            conversations = ChatConversation.objects.filter(administrator=request.user, employee__userprofile__company_id=_company_id(request.user))
         elif UserProfile.objects.filter(user=request.user, role='EMPLOYEE').exists():
             conversations = ChatConversation.objects.filter(employee=request.user)
         else:
@@ -1031,7 +1082,7 @@ def chat_conversation_list_create(request):
     except (ValueError, TypeError):
         return Response({'detail': 'Active employee not found.'}, status=status.HTTP_404_NOT_FOUND)
     employee_profile = UserProfile.objects.select_related('user').filter(
-        user_id=employee_user_id,
+        user_id=employee_user_id, company_id=_company_id(request.user),
         role='EMPLOYEE',
         user__is_active=True,
     ).first()
@@ -1062,7 +1113,7 @@ def chat_conversation_list_create(request):
 @permission_classes([IsAuthenticated])
 def chat_message_list_create(request, conversation_id):
     try:
-        conversation = ChatConversation.objects.select_related('administrator', 'employee').get(pk=conversation_id)
+        conversation = ChatConversation.objects.select_related('administrator', 'employee').get(pk=conversation_id, employee__userprofile__company_id=_company_id(request.user))
     except ChatConversation.DoesNotExist:
         return Response({'detail': 'Conversation not found.'}, status=status.HTTP_404_NOT_FOUND)
 
@@ -1182,7 +1233,7 @@ def notification_broadcast_list_create(request):
     from django.db.models import Count
 
     if request.method == 'GET':
-        broadcasts = NotificationBroadcast.objects.select_related('created_by').annotate(
+        broadcasts = NotificationBroadcast.objects.filter(company_id=_company_id(request.user)).select_related('created_by').annotate(
             read_count=Count('notifications', filter=Q(notifications__read_at__isnull=False)),
         )
         return maybe_paginate(request, broadcasts, NotificationBroadcastSerializer)
@@ -1191,7 +1242,7 @@ def notification_broadcast_list_create(request):
     if not serializer.is_valid():
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     data = serializer.validated_data
-    recipients = User.objects.filter(is_active=True, userprofile__role='EMPLOYEE')
+    recipients = User.objects.filter(is_active=True, userprofile__role='EMPLOYEE', userprofile__company_id=_company_id(request.user))
     if data['target_type'] == 'DEPARTMENT':
         recipients = recipients.filter(employee__department__iexact=data['department'], employee__status='ACTIVE')
         label = data['department']
@@ -1207,7 +1258,7 @@ def notification_broadcast_list_create(request):
     with transaction.atomic():
         broadcast = NotificationBroadcast.objects.create(
             title=data['title'], message=data['message'], target_type=data['target_type'], target_label=label[:255],
-            expires_at=data.get('expires_at'), recipient_count=len(recipients), created_by=request.user,
+            expires_at=data.get('expires_at'), recipient_count=len(recipients), created_by=request.user, company_id=_company_id(request.user),
         )
         Notification.objects.bulk_create([
             Notification(recipient=user, actor=request.user, kind='GENERAL', title=broadcast.title,
@@ -1225,7 +1276,7 @@ def notification_broadcast_list_create(request):
 @api_view(['DELETE'])
 @permission_classes([IsAuthenticated, IsAdminUserRole])
 def notification_broadcast_detail(request, pk):
-    broadcast = NotificationBroadcast.objects.filter(pk=pk).first()
+    broadcast = NotificationBroadcast.objects.filter(pk=pk, company_id=_company_id(request.user)).first()
     if broadcast is None:
         return Response({'detail': 'Notification not found.'}, status=status.HTTP_404_NOT_FOUND)
     record_audit(request, 'WITHDRAW', 'Notification', pk, f'Withdrew "{broadcast.title}" from {broadcast.recipient_count} employee(s).')
@@ -1240,7 +1291,7 @@ def notification_broadcast_detail(request, pk):
 def department_list(request):
     from django.db.models import Count
 
-    rows = Employee.objects.values('department', 'designation').annotate(
+    rows = Employee.objects.filter(company_id=_company_id(request.user)).values('department', 'designation').annotate(
         total=Count('id'), active=Count('id', filter=Q(status='ACTIVE')),
     ).order_by('department', 'designation')
     departments = {}
@@ -1266,7 +1317,7 @@ def department_rename(request):
     if len(new) > 100:
         return Response({'new': ['Use 100 characters or fewer.']}, status=status.HTTP_400_BAD_REQUEST)
     with transaction.atomic():
-        updated = Employee.objects.filter(**{f'{kind}__iexact': old}).update(**{kind: new})
+        updated = Employee.objects.filter(company_id=_company_id(request.user), **{f'{kind}__iexact': old}).update(**{kind: new})
         if not updated:
             return Response({'detail': f'No employees have the {kind} "{old}".'}, status=status.HTTP_404_NOT_FOUND)
         record_audit(request, 'RENAME', 'Department', '', f'Renamed {kind} "{old}" to "{new}" for {updated} employee(s).')
@@ -1278,7 +1329,8 @@ def department_rename(request):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated, IsAdminUserRole])
 def audit_log_list(request):
-    logs = AuditLog.objects.all()
+    company_id = _company_id(request.user)
+    logs = AuditLog.objects.filter(Q(actor__userprofile__company_id=company_id) | Q(subject__userprofile__company_id=company_id)).distinct()
     params = request.query_params
     if params.get('entity_type'):
         logs = logs.filter(entity_type=params['entity_type'])
@@ -1307,6 +1359,6 @@ def audit_log_list(request):
 def audit_log_meta(request):
     """Distinct modules and actions recorded so far, for the audit filters."""
     return Response({
-        'modules': sorted(filter(None, AuditLog.objects.order_by().values_list('module', flat=True).distinct())),
-        'actions': sorted(filter(None, AuditLog.objects.order_by().values_list('action', flat=True).distinct())),
+        'modules': sorted(filter(None, AuditLog.objects.filter(Q(actor__userprofile__company_id=_company_id(request.user)) | Q(subject__userprofile__company_id=_company_id(request.user))).order_by().values_list('module', flat=True).distinct())),
+        'actions': sorted(filter(None, AuditLog.objects.filter(Q(actor__userprofile__company_id=_company_id(request.user)) | Q(subject__userprofile__company_id=_company_id(request.user))).order_by().values_list('action', flat=True).distinct())),
     })

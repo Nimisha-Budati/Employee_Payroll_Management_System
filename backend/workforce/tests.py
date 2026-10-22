@@ -8,6 +8,7 @@ from django.test import TestCase
 from django.utils import timezone
 from rest_framework.test import APIClient
 
+from accounts.test_utils import test_company
 from accounts.models import AttendanceRecord, AttendanceSettings, AuditLog, Notification, UserProfile
 from payroll.calculator import compute_amounts
 from payroll.models import Payslip
@@ -27,7 +28,7 @@ class WorkforceTestCase(TestCase):
     def setUp(self):
         cache.clear()
         self.admin = User.objects.create_user('admin', 'admin@example.com', 'AdminPass123!')
-        UserProfile.objects.create(user=self.admin, role='ADMIN')
+        UserProfile.objects.create(user=self.admin, role='ADMIN', company=test_company())
         self.asha = make_employee('asha', 'EMP001')
         self.ravi = make_employee('ravi', 'EMP002', department='Sales')
         self.client = APIClient()
@@ -118,7 +119,9 @@ class ShiftManagementTests(WorkforceTestCase):
 class LateMinuteTests(WorkforceTestCase):
     def setUp(self):
         super().setUp()
-        AttendanceSettings.objects.create(pk=1, latitude=OFFICE['latitude'], longitude=OFFICE['longitude'], radius_meters=100, is_enabled=True)
+        AttendanceSettings.objects.update_or_create(company=test_company(), defaults={
+            'latitude': OFFICE['latitude'], 'longitude': OFFICE['longitude'], 'radius_meters': 100, 'is_enabled': True,
+        })
         self.shift = self.make_shift(grace_minutes=10)
         self.as_admin().post('/api/shifts/assignments/', {'employee_ids': [self.asha.user_id, self.ravi.user_id],
                                                           'shift_id': self.shift.pk, 'start_date': '2025-01-01'}, format='json')
@@ -282,7 +285,7 @@ class SalaryComponentTests(TestCase):
 
     def test_structure_api_accepts_da_and_bonus_and_payslip_uses_them(self):
         admin = User.objects.create_user('admin', 'admin@example.com', 'AdminPass123!')
-        UserProfile.objects.create(user=admin, role='ADMIN')
+        UserProfile.objects.create(user=admin, role='ADMIN', company=test_company())
         employee = make_employee('asha', 'EMP001')
         client = APIClient()
         client.force_authenticate(admin)

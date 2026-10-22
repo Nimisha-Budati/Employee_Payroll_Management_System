@@ -28,7 +28,8 @@ from rest_framework.decorators import api_view
 from rest_framework.response import Response
 
 from .audit import record_audit
-from .models import PasswordResetOTP, UserProfile
+from .models import (AttendanceSettings, Company, LeavePolicySettings, LeaveType, OnboardingSettings,
+                     PasswordResetOTP, ReminderSettings, UserProfile)
 from .notifications import notify_user
 from .throttling import clear_failures, client_ip, is_locked, register_failure
 
@@ -149,6 +150,73 @@ def register(request):
         'employee-dashboard.html',
     )
     return JsonResponse({'message': 'Account created successfully'}, status=201)
+
+
+@require_POST
+def company_register(request):
+    """Public tenant signup. The request can create a tenant and its first admin only."""
+    data = json_body(request)
+    if data is None:
+        return _bad_json()
+    company_name = _text(data, 'company_name')
+    company_email = _text(data, 'company_email').lower()
+    admin_name = ' '.join(_text(data, 'admin_name').split())
+    admin_email = _text(data, 'admin_email').lower()
+    phone = _text(data, 'phone')
+    address = _text(data, 'address')
+    password = data.get('password', '') if isinstance(data.get('password', ''), str) else ''
+    confirmation = data.get('confirm_password', '')
+    if not all((company_name, company_email, admin_name, admin_email, password, confirmation)):
+        return JsonResponse({'error': 'Company and administrator name, email, and password are required.'}, status=400)
+    if len(company_name) > 160 or len(admin_name) > 150 or len(phone) > 20:
+        return JsonResponse({'error': 'One or more fields exceed the allowed length.'}, status=400)
+    try:
+        validate_email(company_email)
+        validate_email(admin_email)
+    except ValidationError:
+        return JsonResponse({'error': 'Enter valid company and administrator email addresses.'}, status=400)
+    if password != confirmation:
+        return JsonResponse({'error': 'Passwords do not match.'}, status=400)
+    if Company.objects.filter(email__iexact=company_email).exists():
+        return JsonResponse({'error': 'A company is already registered with that email.'}, status=400)
+    if User.objects.filter(email__iexact=admin_email).exists():
+        return JsonResponse({'error': 'An account already exists with the administrator email.'}, status=400)
+    error = password_error(password, User(username=admin_email.split('@', 1)[0], email=admin_email, first_name=admin_name))
+    if error:
+        return JsonResponse({'error': error}, status=400)
+
+    # Usernames remain unique under Django's existing model constraint; the numeric suffix is server-generated.
+    import re
+    base = re.sub(r'[^A-Za-z0-9@.+_-]', '', admin_email.split('@', 1)[0])[:140] or 'companyadmin'
+    username, suffix = base, 1
+    while User.objects.filter(username__iexact=username).exists():
+        username = f'{base[:140 - len(str(suffix))]}{suffix}'
+        suffix += 1
+    first_name, _, last_name = admin_name.partition(' ')
+    with transaction.atomic():
+        company = Company.objects.create(name=company_name, email=company_email, phone=phone, address=address)
+        user = User.objects.create_user(username=username, email=admin_email, password=password,
+                                        first_name=first_name, last_name=last_name)
+        UserProfile.objects.create(user=user, role='ADMIN', company=company)
+        LeavePolicySettings.load(company)
+        OnboardingSettings.load(company)
+        ReminderSettings.load(company)
+        AttendanceSettings.objects.create(company=company)
+        for order, (name, days, paid, description) in enumerate((
+            ('Casual Leave', 12, True, 'Short personal leave.'),
+            ('Sick Leave', 12, True, 'Leave when unwell.'),
+            ('Earned Leave', 15, True, 'Planned leave.'),
+            ('Other', None, False, 'Unpaid leave.'),
+        ), start=1):
+            LeaveType.objects.create(company=company, name=name, annual_days=days, is_paid=paid,
+                                     description=description, sort_order=order)
+        from assistant.models import AIKnowledgeBase
+        AIKnowledgeBase.objects.create(company=company)
+        login(request, user)
+        request.session.set_expiry(settings.SESSION_COOKIE_AGE)
+    return JsonResponse({'message': 'Company registered successfully', 'username': username,
+                         'email': user.email, 'role': 'ADMIN', 'full_name': admin_name,
+                         'company_name': company.name}, status=201)
 
 
 @require_POST

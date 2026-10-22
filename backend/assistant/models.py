@@ -1,23 +1,26 @@
 from django.contrib.auth.models import User
 from django.db import models
+from accounts.models import Company
 
 
 class AIKnowledgeBase(models.Model):
     """Organisation-specific text the AI assistants may quote (single row, edited by administrators)."""
 
+    company = models.ForeignKey(Company, null=True, on_delete=models.CASCADE, related_name='ai_knowledge_bases')
     company_overview = models.TextField(blank=True)
     leave_policy = models.TextField(blank=True)
     faq = models.TextField(blank=True)
     updated_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
     updated_at = models.DateTimeField(auto_now=True)
 
-    def save(self, *args, **kwargs):
-        self.pk = 1
-        super().save(*args, **kwargs)
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['company'], name='one_ai_knowledge_per_company')]
 
     @classmethod
-    def load(cls):
-        return cls.objects.get_or_create(pk=1)[0]
+    def load(cls, company=None):
+        if company is None:
+            return cls.objects.filter(company__isnull=True).first() or cls.objects.create(company=None)
+        return cls.objects.get_or_create(company=company)[0]
 
 
 class AIConversation(models.Model):

@@ -16,6 +16,7 @@ from django.test import TestCase, override_settings
 from django.utils import timezone
 from rest_framework.test import APIClient
 
+from accounts.test_utils import test_company
 from accounts.models import UserProfile, WorkFromHomeRequest
 from payroll.models import Payslip
 from payroll.tests import check_in, make_employee, make_structure
@@ -31,7 +32,7 @@ class AssistantDataTestCase(TestCase):
     def setUp(self):
         cache.clear()
         self.admin = User.objects.create_user('admin', 'admin@example.com', 'AdminPass123!')
-        UserProfile.objects.create(user=self.admin, role='ADMIN')
+        UserProfile.objects.create(user=self.admin, role='ADMIN', company=test_company())
         self.asha = make_employee('asha', 'EMP001')
         self.ravi = make_employee('ravi', 'EMP002')
         make_structure(self.asha.user, da=Decimal('5000'), bonus=Decimal('1000'))    # gross 55,000 + bonus
@@ -211,7 +212,7 @@ class MissingDataTests(TestCase):
     def setUp(self):
         cache.clear()
         self.admin = User.objects.create_user('admin', 'admin@example.com', 'AdminPass123!')
-        UserProfile.objects.create(user=self.admin, role='ADMIN')
+        UserProfile.objects.create(user=self.admin, role='ADMIN', company=test_company())
         self.employee = make_employee('meena', 'EMP003')
         self.client = APIClient()
         self.client.force_authenticate(self.employee.user)

@@ -4,9 +4,10 @@ import importlib
 from datetime import date, timedelta
 from decimal import Decimal
 
-from django.apps import apps as django_apps
 from django.contrib.auth.models import User
 from django.core.cache import cache
+from django.db import connection
+from django.db.migrations.loader import MigrationLoader
 from django.test import TestCase
 from django.utils import timezone
 from rest_framework.test import APIClient
@@ -15,6 +16,7 @@ from payroll.calculator import attendance_summary
 from payroll.tests import make_employee
 
 from .leave_policy import carry_forward, leave_balance_for, leave_year_bounds, leave_year_of
+from .test_utils import test_company
 from .models import AuditLog, EmployeeLeaveBalance, LeavePolicySettings, LeaveRequest, LeaveType, UserProfile
 
 THIS_YEAR = timezone.localdate().year
@@ -24,7 +26,7 @@ class LeavePolicyTestCase(TestCase):
     def setUp(self):
         cache.clear()
         self.admin = User.objects.create_user('admin', 'admin@example.com', 'AdminPass123!')
-        UserProfile.objects.create(user=self.admin, role='ADMIN')
+        UserProfile.objects.create(user=self.admin, role='ADMIN', company=test_company())
         self.asha = make_employee('asha', 'EMP001')
         self.ravi = make_employee('ravi', 'EMP002')
         self.admin_client = APIClient()
@@ -80,7 +82,7 @@ class PolicyManagementTests(LeavePolicyTestCase):
         LeaveRequest.objects.create(employee=self.asha.user, leave_type='Casual Leave', start_date=date(THIS_YEAR, 1, 5),
                                     end_date=date(THIS_YEAR, 1, 6), reason='x', status='APPROVED')
         self.assertEqual(self.balance('Casual Leave')['available'], 10)
-        casual = LeaveType.objects.get(name='Casual Leave')
+        casual = LeaveType.objects.get(name='Casual Leave', company=test_company())
         response = self.admin_client.patch(f'/api/leave-types/{casual.pk}/', {'annual_days': 20}, format='json')
         self.assertEqual(response.status_code, 200)
         b = self.balance('Casual Leave')
@@ -143,16 +145,17 @@ class BalanceTests(LeavePolicyTestCase):
 
     def test_leave_year_can_start_in_april(self):
         self.admin_client.put('/api/leave-policy/', {'leave_year_start_month': 4}, format='json')
-        start, end = leave_year_bounds(2026)
+        rules = LeavePolicySettings.load(test_company())
+        start, end = leave_year_bounds(2026, rules)
         self.assertEqual((start, end), (date(2026, 4, 1), date(2027, 3, 31)))
-        self.assertEqual(leave_year_of(date(2027, 3, 15)), 2026)
+        self.assertEqual(leave_year_of(date(2027, 3, 15), rules), 2026)
         LeaveRequest.objects.create(employee=self.asha.user, leave_type='Casual Leave', start_date=date(2027, 3, 15),
                                     end_date=date(2027, 3, 16), reason='x', status='APPROVED')
         self.assertEqual(leave_balance_for(self.asha.user, 2026)['Casual Leave']['approved'], 2)
         self.assertEqual(leave_balance_for(self.asha.user, 2027)['Casual Leave']['approved'], 0)
 
     def test_carry_forward_and_admin_adjustment(self):
-        casual = LeaveType.objects.get(name='Casual Leave')
+        casual = LeaveType.objects.get(name='Casual Leave', company=test_company())
         self.admin_client.patch(f'/api/leave-types/{casual.pk}/', {'allow_carry_forward': True, 'max_carry_forward_days': 5}, format='json')
         LeaveRequest.objects.create(employee=self.asha.user, leave_type='Casual Leave', start_date=date(2025, 3, 3),
                                     end_date=date(2025, 3, 12), reason='x', status='APPROVED')   # 10 used -> 2 left
@@ -215,7 +218,7 @@ class ApplicationValidationTests(LeavePolicyTestCase):
 
 class PermissionTests(LeavePolicyTestCase):
     def test_employees_cannot_change_policy_or_see_other_balances(self):
-        casual = LeaveType.objects.get(name='Casual Leave')
+        casual = LeaveType.objects.get(name='Casual Leave', company=test_company())
         self.assertEqual(self.client.post('/api/leave-types/', {'name': 'Free', 'annual_days': 99}, format='json').status_code, 403)
         self.assertEqual(self.client.patch(f'/api/leave-types/{casual.pk}/', {'annual_days': 99}, format='json').status_code, 403)
         self.assertEqual(self.client.delete(f'/api/leave-types/{casual.pk}/').status_code, 403)
@@ -237,22 +240,42 @@ class PermissionTests(LeavePolicyTestCase):
 
 class MigrationTests(TestCase):
     def test_seed_links_existing_requests_without_changing_them(self):
-        employee = make_employee('meena', 'EMP003')
-        old = LeaveRequest.objects.create(employee=employee.user, leave_type='Sick Leave', start_date=date(2024, 5, 6),
+        # The historical 0021 model had no company field, so use a user without
+        # the modern tenant fixture's duplicate leave-type rows.
+        employee = User.objects.create_user('migration-meena', password='MigrationTestPass123!')
+        old = LeaveRequest.objects.create(employee=employee, leave_type='Sick Leave', start_date=date(2024, 5, 6),
                                           end_date=date(2024, 5, 8), reason='Flu', status='APPROVED')
-        legacy = LeaveRequest.objects.create(employee=employee.user, leave_type='Study Leave', start_date=date(2024, 6, 3),
+        legacy = LeaveRequest.objects.create(employee=employee, leave_type='Study Leave', start_date=date(2024, 6, 3),
                                              end_date=date(2024, 6, 3), reason='Exam', status='REJECTED', rejection_reason='Busy')
         LeaveRequest.objects.filter(pk__in=[old.pk, legacy.pk]).update(policy=None)   # as before the migration
         before = list(LeaveRequest.objects.order_by('pk').values('pk', 'leave_type', 'start_date', 'end_date', 'number_of_days', 'status',
                                                                  'reason', 'rejection_reason'))
         migration = importlib.import_module('accounts.migrations.0021_seed_leave_policy')
-        migration.seed(django_apps, None)
-        migration.seed(django_apps, None)   # running twice does not duplicate anything
+        # Run the data function with the model state immediately before 0021.
+        # This migration predates Company, so its historical state must not use
+        # today's tenant-aware models.
+        historical_apps = MigrationLoader(connection).project_state(
+            [('accounts', '0020_leave_policy')]
+        ).apps
+        HistoricalLeaveType = historical_apps.get_model('accounts', 'LeaveType')
+        HistoricalLeavePolicySettings = historical_apps.get_model('accounts', 'LeavePolicySettings')
+        migration.seed(historical_apps, None)
+        first_types = list(HistoricalLeaveType.objects.order_by('pk').values('name', 'annual_days', 'is_paid', 'is_active'))
+        first_settings_count = HistoricalLeavePolicySettings.objects.count()
+        migration.seed(historical_apps, None)   # running twice does not duplicate anything
+        self.assertEqual(
+            list(HistoricalLeaveType.objects.order_by('pk').values('name', 'annual_days', 'is_paid', 'is_active')),
+            first_types,
+        )
+        self.assertEqual(HistoricalLeavePolicySettings.objects.count(), first_settings_count)
         after = list(LeaveRequest.objects.order_by('pk').values('pk', 'leave_type', 'start_date', 'end_date', 'number_of_days', 'status',
                                                                 'reason', 'rejection_reason'))
         self.assertEqual(before, after)
         self.assertEqual(LeaveRequest.objects.get(pk=old.pk).policy.name, 'Sick Leave')
-        study = LeaveType.objects.get(name='Study Leave')
+        study = LeaveType.objects.get(name='Study Leave', company__isnull=True)
         self.assertFalse(study.is_active)
         self.assertEqual(LeaveRequest.objects.get(pk=legacy.pk).policy, study)
         self.assertEqual(LeaveType.objects.filter(name='Sick Leave').count(), 1)
+        other = HistoricalLeaveType.objects.get(name='Other')
+        self.assertIsNone(other.annual_days)
+        self.assertFalse(other.is_paid)

@@ -13,7 +13,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from accounts.audit import record_audit
-from accounts.models import Employee
+from accounts.models import Employee, UserProfile
 from accounts.notifications import notify_user
 from accounts.pagination import StandardPagination
 from accounts.permissions import IsAdminUserRole
@@ -35,8 +35,16 @@ def _period_label(year, month):
     return f'{calendar.month_name[month]} {year}'
 
 
-def _employee_or_404(pk):
-    return Employee.objects.select_related('user').filter(pk=pk).first()
+def _company_id(user):
+    return UserProfile.objects.filter(user=user).values_list('company_id', flat=True).first()
+
+
+def _tenant(queryset, request, user_field='employee'):
+    return queryset.filter(**{f'{user_field}__userprofile__company_id': _company_id(request.user)})
+
+
+def _employee_or_404(pk, request):
+    return Employee.objects.select_related('user').filter(pk=pk, company_id=_company_id(request.user)).first()
 
 
 # --- Salary structures ------------------------------------------------------
@@ -45,7 +53,7 @@ def _employee_or_404(pk):
 @permission_classes(ADMIN)
 def salary_structure_list(request):
     """Every employee with their salary structure (or null when none is set yet)."""
-    employees = Employee.objects.select_related('user', 'user__salary_structure').order_by('employee_id')
+    employees = Employee.objects.filter(company_id=_company_id(request.user)).select_related('user', 'user__salary_structure').order_by('employee_id')
     params = request.query_params
     if params.get('status') in ('ACTIVE', 'INACTIVE'):
         employees = employees.filter(status=params['status'])
@@ -86,7 +94,7 @@ def salary_structure_list(request):
 @api_view(['GET', 'PUT'])
 @permission_classes(ADMIN)
 def salary_structure_detail(request, employee_pk):
-    employee = _employee_or_404(employee_pk)
+    employee = _employee_or_404(employee_pk, request)
     if employee is None:
         return Response({'detail': 'Employee not found.'}, status=status.HTTP_404_NOT_FOUND)
     structure = SalaryStructure.objects.filter(employee=employee.user).first()
@@ -128,7 +136,7 @@ def my_salary_structure(request):
 
 def _payslip_queryset(request):
     """Administrators see every payslip; employees only their own finalised ones."""
-    queryset = Payslip.objects.all()
+    queryset = _tenant(Payslip.objects.all(), request)
     if not is_admin_user(request.user):
         return queryset.filter(employee=request.user, status=Payslip.PAID)
     return queryset
@@ -173,12 +181,12 @@ def payslip_list(request):
 
 def _payslip_for_admin(pk, for_update=False):
     queryset = Payslip.objects.select_for_update() if for_update else Payslip.objects
-    return queryset.filter(pk=pk).first()
+    return queryset.filter(pk=pk)
 
 
 @api_view(['GET', 'PATCH', 'DELETE'])
 def payslip_detail(request, pk):
-    payslip = Payslip.objects.filter(pk=pk).first()
+    payslip = _tenant(Payslip.objects, request).filter(pk=pk).first()
     admin = is_admin_user(request.user)
     if payslip is None or not (admin or (payslip.employee_id == request.user.pk and payslip.status == Payslip.PAID)):
         return Response({'detail': 'Payslip not found.'}, status=status.HTTP_404_NOT_FOUND)
@@ -222,7 +230,7 @@ def payslip_detail(request, pk):
 def payslip_recalculate(request, pk):
     """Rebuild a draft payslip from the current salary structure and attendance, discarding manual edits."""
     with transaction.atomic():
-        payslip = _payslip_for_admin(pk, for_update=True)
+        payslip = _tenant(_payslip_for_admin(pk, for_update=True), request).first()
         if payslip is None:
             return Response({'detail': 'Payslip not found.'}, status=status.HTTP_404_NOT_FOUND)
         if payslip.status != Payslip.DRAFT:
@@ -257,11 +265,11 @@ def payroll_run(request):
             status=status.HTTP_400_BAD_REQUEST,
         )
 
-    employees = Employee.objects.filter(status='ACTIVE', user__is_active=True).select_related('user', 'user__salary_structure')
+    employees = Employee.objects.filter(company_id=_company_id(request.user), status='ACTIVE', user__is_active=True).select_related('user', 'user__salary_structure')
     if serializer.validated_data.get('employee_ids'):
         employees = employees.filter(pk__in=serializer.validated_data['employee_ids'])
     employees = list(employees.order_by('employee_id'))
-    existing = set(Payslip.objects.filter(year=year, month=month).values_list('employee_id', flat=True))
+    existing = set(_tenant(Payslip.objects.filter(year=year, month=month), request).values_list('employee_id', flat=True))
 
     created, skipped = [], []
     with transaction.atomic():
@@ -293,7 +301,7 @@ def payroll_run(request):
 
     from workforce.models import OvertimeRecord
 
-    pending_overtime = OvertimeRecord.objects.filter(
+    pending_overtime = OvertimeRecord.objects.filter(employee__userprofile__company_id=_company_id(request.user),
         status=OvertimeRecord.PENDING, date__year=year, date__month=month,
     ).count()
     return Response(
@@ -312,13 +320,13 @@ def payroll_finalize(request):
     year, month = serializer.validated_data['year'], serializer.validated_data['month']
 
     with transaction.atomic():
-        drafts = Payslip.objects.select_for_update().filter(year=year, month=month, status=Payslip.DRAFT)
+        drafts = _tenant(Payslip.objects.select_for_update().filter(year=year, month=month, status=Payslip.DRAFT), request)
         if serializer.validated_data.get('payslip_ids'):
             drafts = drafts.filter(pk__in=serializer.validated_data['payslip_ids'])
         drafts = list(drafts.select_related('employee'))
         if not drafts:
             return Response({'detail': 'There are no draft payslips to finalise.'}, status=status.HTTP_400_BAD_REQUEST)
-        if not review_is_current(year, month):
+        if not review_is_current(year, month, company_id=_company_id(request.user)):
             return Response({'detail': f'Review the variance preview for {_period_label(year, month)} before finalising. '
                                        'Drafts changed after the last review need a new review.',
                              'code': 'review_required'}, status=status.HTTP_409_CONFLICT)
@@ -337,7 +345,7 @@ def payroll_finalize(request):
 
 @api_view(['GET'])
 def payslip_pdf(request, pk):
-    payslip = Payslip.objects.filter(pk=pk).first()
+    payslip = _tenant(Payslip.objects, request).filter(pk=pk).first()
     admin = is_admin_user(request.user)
     if payslip is None or not (admin or (payslip.employee_id == request.user.pk and payslip.status == Payslip.PAID)):
         return Response({'detail': 'Payslip not found.'}, status=status.HTTP_404_NOT_FOUND)
@@ -366,7 +374,7 @@ def payroll_export(request):
             raise ValueError
     except (KeyError, ValueError):
         return Response({'detail': 'Provide a valid year and month.'}, status=status.HTTP_400_BAD_REQUEST)
-    payslips = Payslip.objects.filter(year=year, month=month).order_by('employee_code')
+    payslips = _tenant(Payslip.objects.filter(year=year, month=month), request).order_by('employee_code')
     response = HttpResponse(content_type='text/csv; charset=utf-8')
     response['Content-Disposition'] = f'attachment; filename="payroll_{year}-{month:02d}.csv"'
     response.write('﻿')
@@ -398,7 +406,7 @@ def payroll_reports(request):
         return Response({'detail': 'Invalid year.'}, status=status.HTTP_400_BAD_REQUEST)
 
     rows = {
-        row['month']: row for row in Payslip.objects.filter(year=year).values('month').annotate(
+        row['month']: row for row in _tenant(Payslip.objects.filter(year=year), request).values('month').annotate(
             count=Count('id'), gross=Sum('gross_earnings'), deductions=Sum('total_deductions'), net=Sum('net_salary'),
             drafts=Count('id', filter=Q(status=Payslip.DRAFT)), paid=Count('id', filter=Q(status=Payslip.PAID)),
         )
@@ -423,7 +431,7 @@ def payroll_reports(request):
     departments = []
     if 1 <= month <= 12:
         departments = list(
-            Payslip.objects.filter(year=year, month=month).values('department').annotate(
+            _tenant(Payslip.objects.filter(year=year, month=month), request).values('department').annotate(
                 headcount=Count('id'), gross=Sum('gross_earnings'), net=Sum('net_salary'),
             ).order_by('-net')
         )

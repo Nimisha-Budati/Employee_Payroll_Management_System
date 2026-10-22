@@ -62,7 +62,7 @@
         username, password, role, remember_me: $('#rememberMe').checked,
       }, { auth: false }));
       api.resetCsrf();
-      App.session.set({ username: data.username, role: data.role, fullName: data.full_name });
+      App.session.set({ username: data.username, role: data.role, fullName: data.full_name, companyName: data.company_name || '' });
       location.replace(App.session.home(data.role));
     } catch (error) {
       note('loginError', error.message);
