@@ -414,7 +414,9 @@ def employee_meta(request):
     company_id = _company_id(request.user)
     departments = list(_company_employees(company_id).order_by('department').values_list('department', flat=True).distinct())
     pending = User.objects.filter(
-        userprofile__role='EMPLOYEE', userprofile__company_id=company_id, employee__isnull=True, is_active=True,
+        userprofile__role='EMPLOYEE', employee__isnull=True, is_active=True,
+    ).filter(
+        Q(userprofile__company_id=company_id) | Q(userprofile__company__isnull=True)
     ).order_by('username')
     return Response({
         'departments': departments,

@@ -2,12 +2,13 @@ from django.urls import path
 from . import corrections, onboarding, reminders, team_calendar
 from .views import company_profile
 from .google_auth import google_callback, google_config, google_link, google_start
-from .auth_views import change_password, company_register, csrf_token, login_user, logout_user, register, request_password_reset, reset_password, verify_password_reset
+from .auth_views import change_password, company_register, csrf_token, login_user, logout_user, public_company_list, register, request_password_reset, reset_password, verify_password_reset
 from .views import audit_log_list, audit_log_meta, document_expiry, notification_preferences, announcement_detail, announcement_list_create, attendance_history, attendance_list, attendance_mark, attendance_settings, attendance_status, chat_conversation_list_create, chat_employee_list, chat_message_list_create, department_list, department_rename, document_delete, document_file, document_list_create, document_review, employee_detail, employee_list_create, employee_meta, holiday_detail, holiday_list_create, my_profile, notification_broadcast_detail, notification_broadcast_list_create, notification_list, notification_mark_all_read, notification_mark_read, leave_balance, leave_balance_adjust, leave_cancel, leave_carry_forward, leave_list_create, leave_policy_settings, leave_type_detail, leave_type_list_create, leave_update_status, wfh_detail, wfh_list_create
 
 urlpatterns = [
     path('csrf/', csrf_token, name='csrf-token'),
     path('register/', register),
+    path('companies/public/', public_company_list, name='company-public-list'),
     path('companies/register/', company_register, name='company-register'),
     path('auth/google/config/', google_config, name='google-config'),
     path('auth/google/start/', google_start, name='google-start'),

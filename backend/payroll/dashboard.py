@@ -46,7 +46,7 @@ def admin_dashboard(request):
         'active': active.count(),
         'inactive': Employee.objects.filter(company_id=company_id).exclude(status='ACTIVE').count(),
         'joined_this_month': Employee.objects.filter(company_id=company_id, joining_date__year=today.year, joining_date__month=today.month).count(),
-        'pending_onboarding': User.objects.filter(userprofile__company_id=company_id, userprofile__role='EMPLOYEE', employee__isnull=True, is_active=True).count(),
+        'pending_onboarding': User.objects.filter(userprofile__role='EMPLOYEE', employee__isnull=True, is_active=True).filter(Q(userprofile__company_id=company_id) | Q(userprofile__company__isnull=True)).count(),
         'onboarding_in_progress': active.filter(onboarding_status=Employee.ONBOARDING_PENDING, onboarding_ready_at__isnull=True).count(),
         'onboarding_ready': active.filter(onboarding_status=Employee.ONBOARDING_PENDING, onboarding_ready_at__isnull=False).count(),
     }

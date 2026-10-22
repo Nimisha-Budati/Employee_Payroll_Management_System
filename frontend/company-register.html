@@ -29,8 +29,15 @@
       <fieldset class="stack-sm"><legend>First administrator</legend>
         <div class="field"><label for="adminName">Full name</label><input class="input" id="adminName" name="admin_name" autocomplete="name" maxlength="150" required></div>
         <div class="field"><label for="adminEmail">Email</label><input class="input" id="adminEmail" name="admin_email" type="email" autocomplete="email" required></div>
-        <div class="field"><label for="adminPassword">Password</label><input class="input" id="adminPassword" name="password" type="password" autocomplete="new-password" required></div>
-        <div class="field"><label for="adminPasswordConfirm">Confirm password</label><input class="input" id="adminPasswordConfirm" name="confirm_password" type="password" autocomplete="new-password" required></div>
+        <div class="field">
+          <label for="adminPassword">Password</label>
+          <input class="input" id="adminPassword" name="password" type="password" autocomplete="new-password" minlength="8" required>
+          <span class="hint">Minimum 8 characters. Avoid common words, numbers only, or names.</span>
+        </div>
+        <div class="field">
+          <label for="adminPasswordConfirm">Confirm password</label>
+          <input class="input" id="adminPasswordConfirm" name="confirm_password" type="password" autocomplete="new-password" minlength="8" required>
+        </div>
       </fieldset>
       <button class="btn btn-primary btn-block" type="submit">Create company workspace</button>
     </form>

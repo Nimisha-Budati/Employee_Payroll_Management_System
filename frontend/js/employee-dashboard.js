@@ -11,7 +11,7 @@
   const { employee, attendance, requests, latest_payslip: slip } = data;
 
   const notices = [];
-  if (!employee) notices.push(html`<div class="alert alert-warning">${icon('info')}<span>Your employment record has not been created yet. An administrator needs to complete it before payroll, attendance and leave work for you.</span></div>`);
+  if (!employee) notices.push(html`<div class="alert alert-warning">${icon('info')}<span>Your employment record has not been created yet. An administrator from <strong>${App.esc(user.companyName || 'your company')}</strong> will complete your employment record before attendance, leave and payroll become active.</span></div>`);
   const docs = data.documents || { expired: 0, expiring: 0 };
   if (docs.expired || docs.expiring) {
     notices.push(html`<div class="alert alert-warning">${icon('alert')}<span>${docs.expired ? `${docs.expired} of your documents ${docs.expired === 1 ? 'has' : 'have'} expired` : ''}${docs.expired && docs.expiring ? ' and ' : ''}${docs.expiring ? `${docs.expiring} ${docs.expiring === 1 ? 'is' : 'are'} expiring soon` : ''}. <a href="employee-documents.html?expiry=${docs.expired ? 'EXPIRED' : 'EXPIRING'}">Upload a renewed copy</a>.</span></div>`);

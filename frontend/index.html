@@ -59,7 +59,13 @@
         <p>Employee accounts only. An administrator will complete your employment details.</p>
         <form id="registerForm" class="stack-sm" novalidate>
           <div class="alert alert-danger" id="registerError" role="alert" hidden></div>
-          <div class="alert alert-success" id="registerOk" role="status" hidden></div>
+          <div class="field" id="registerCompanyField">
+            <label for="registerCompany">Company</label>
+            <select class="select" id="registerCompany" name="company_id" required>
+              <option value="">Select your company</option>
+            </select>
+            <span class="hint">Select the company you are joining.</span>
+          </div>
           <div class="field"><label for="registerUsername">Username</label><input class="input" id="registerUsername" name="username" autocomplete="username" required></div>
           <div class="field"><label for="registerEmail">Email</label><input class="input" id="registerEmail" name="email" type="email" autocomplete="email" required></div>
           <div class="field"><label for="registerPassword">Password</label><input class="input" id="registerPassword" name="password" type="password" autocomplete="new-password" required><span class="hint">At least 8 characters; avoid common or all-numeric passwords.</span></div>

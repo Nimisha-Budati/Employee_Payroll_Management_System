@@ -1,9 +1,10 @@
+from importlib import import_module
 from datetime import date, timedelta
 from decimal import Decimal
-from unittest.mock import patch
+from unittest.mock import MagicMock, call, patch
 
 from django.contrib.auth.models import User
-from django.test import TestCase
+from django.test import SimpleTestCase, TestCase
 from django.utils import timezone
 from rest_framework.test import APIClient
 
@@ -17,6 +18,34 @@ from assistant.models import AIConversation, AIKnowledgeBase
 from payroll.models import Payslip, SalaryStructure
 from workforce.models import OvertimeRecord, Shift, ShiftAssignment
 from .reminders import run_reminders
+
+
+class LeavePolicySequenceMigrationTests(SimpleTestCase):
+    def test_migration_resets_sequences_for_company_registration_tables(self):
+        migration = import_module('accounts.migrations.0028_reset_company_registration_sequences')
+
+        apps = MagicMock()
+        apps.get_model.side_effect = lambda app_label, model_name: (app_label, model_name)
+        cursor = MagicMock()
+        connection = MagicMock()
+        connection.ops.sequence_reset_sql.return_value = ['RESET FIRST TEST SEQUENCE', 'RESET SECOND TEST SEQUENCE']
+        connection.cursor.return_value.__enter__.return_value = cursor
+        schema_editor = MagicMock(connection=connection)
+
+        migration.reset_company_registration_sequences(apps, schema_editor)
+
+        expected_models = [
+            ('accounts', 'Company'), ('accounts', 'UserProfile'), ('accounts', 'LeavePolicySettings'),
+            ('accounts', 'OnboardingSettings'), ('accounts', 'ReminderSettings'),
+            ('accounts', 'AttendanceSettings'), ('accounts', 'LeaveType'),
+            ('auth', 'User'), ('assistant', 'AIKnowledgeBase'),
+        ]
+        self.assertEqual([call.args for call in apps.get_model.call_args_list], expected_models)
+        self.assertEqual(connection.ops.sequence_reset_sql.call_args.args[1], expected_models)
+        self.assertEqual(cursor.execute.call_args_list, [
+            call('RESET FIRST TEST SEQUENCE'),
+            call('RESET SECOND TEST SEQUENCE'),
+        ])
 
 
 class CompanyPolicyAndReminderIsolationTests(TestCase):
@@ -105,6 +134,23 @@ class CompanyRegistrationSecurityTests(TestCase):
         self.assertEqual(LeaveType.objects.filter(company=company).count(), 4)
         self.assertTrue(AIKnowledgeBase.objects.filter(company=company).exists())
         self.assertTrue(AttendanceSettings.objects.filter(company=company).exists())
+
+    def test_registration_validates_password_against_the_account_that_will_be_created(self):
+        User.objects.create_user(username='morgan', email='existing@northwind.example', password='Existing-Passphrase-2026!')
+
+        with patch('accounts.auth_views.password_error', return_value=None) as validate_password:
+            response = self.client.post(
+                '/api/companies/register/',
+                self.payload(password='A-Genuinely-Unrelated-Passphrase-2026!',
+                             confirm_password='A-Genuinely-Unrelated-Passphrase-2026!'),
+                content_type='application/json',
+            )
+
+        self.assertEqual(response.status_code, 201)
+        candidate_user = validate_password.call_args.args[1]
+        self.assertEqual(candidate_user.username, 'morgan1')
+        self.assertEqual(candidate_user.first_name, 'Morgan')
+        self.assertEqual(candidate_user.last_name, 'Admin')
 
     def test_duplicate_company_email_is_rejected_case_insensitively(self):
         Company.objects.create(name='Existing', email='existing@northwind.example')

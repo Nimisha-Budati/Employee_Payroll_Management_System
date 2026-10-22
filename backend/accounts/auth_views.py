@@ -139,17 +139,47 @@ def register(request):
     if User.objects.filter(email__iexact=email).exists():
         return JsonResponse({'error': 'Email already exists'}, status=400)
 
+    company = None
+    company_id = data.get('company_id')
+    if company_id:
+        try:
+            company = Company.objects.get(pk=company_id)
+        except (Company.DoesNotExist, ValueError, TypeError):
+            return JsonResponse({'error': 'Please select a valid company.'}, status=400)
+    elif Company.objects.count() == 1:
+        company = Company.objects.first()
+    elif Company.objects.exists():
+        return JsonResponse({'error': 'Please select your company from the list.'}, status=400)
+
     with transaction.atomic():
         user = User.objects.create_user(username=username, email=email, password=password)
-        UserProfile.objects.create(user=user, role=role)
+        UserProfile.objects.create(user=user, role=role, company=company)
+
+    company_label = f' at {company.name}' if company else ''
     notify_user(
         user,
         'EMPLOYEE',
         'Welcome to PayrollPro',
-        'Your employee account is ready. An administrator will complete your employment record.',
+        f'Your employee account is ready{company_label}. An administrator will complete your employment record.',
         'employee-dashboard.html',
     )
+    if company:
+        from .notifications import notify_admins
+        notify_admins(
+            'EMPLOYEE',
+            'New employee registered',
+            f'{user.username} ({user.email}) registered an employee account and is waiting for onboarding.',
+            'employee-management.html',
+            company_id=company.pk,
+        )
     return JsonResponse({'message': 'Account created successfully'}, status=201)
+
+
+@require_GET
+def public_company_list(request):
+    """Public list of registered companies so employees can choose which company to register with."""
+    companies = list(Company.objects.values('id', 'name').order_by('name'))
+    return JsonResponse({'companies': companies})
 
 
 @require_POST
@@ -181,10 +211,6 @@ def company_register(request):
         return JsonResponse({'error': 'A company is already registered with that email.'}, status=400)
     if User.objects.filter(email__iexact=admin_email).exists():
         return JsonResponse({'error': 'An account already exists with the administrator email.'}, status=400)
-    error = password_error(password, User(username=admin_email.split('@', 1)[0], email=admin_email, first_name=admin_name))
-    if error:
-        return JsonResponse({'error': error}, status=400)
-
     # Usernames remain unique under Django's existing model constraint; the numeric suffix is server-generated.
     import re
     base = re.sub(r'[^A-Za-z0-9@.+_-]', '', admin_email.split('@', 1)[0])[:140] or 'companyadmin'
@@ -193,6 +219,15 @@ def company_register(request):
         username = f'{base[:140 - len(str(suffix))]}{suffix}'
         suffix += 1
     first_name, _, last_name = admin_name.partition(' ')
+    error = password_error(password, User(
+        username=username,
+        email=admin_email,
+        first_name=first_name,
+        last_name=last_name,
+    ))
+    if error:
+        return JsonResponse({'error': error}, status=400)
+
     with transaction.atomic():
         company = Company.objects.create(name=company_name, email=company_email, phone=phone, address=address)
         user = User.objects.create_user(username=username, email=admin_email, password=password,
@@ -263,6 +298,8 @@ def login_user(request):
     request.session.set_expiry(settings.SESSION_COOKIE_AGE if remember_me else 0)
     record_audit(request, 'LOGIN', 'Account', user.pk, f'{user.username} signed in as {profile.role.lower()} (password).')
 
+    company = getattr(profile, 'company', None)
+    company_name = getattr(company, 'name', '') if company else ''
     return JsonResponse({
         'message': 'Login successful',
         'username': user.username,
@@ -270,6 +307,7 @@ def login_user(request):
         'role': profile.role,
         'full_name': user.get_full_name() or user.username,
         'remember_me': remember_me,
+        'company_name': company_name,
     })
 
 
