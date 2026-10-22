@@ -9,9 +9,12 @@
    * Configuration
    * ------------------------------------------------------------------ */
   const configured = window.APP_CONFIG && window.APP_CONFIG.apiUrl;
-  // Frontend served by Django on :8000 uses a relative URL; a separate dev server (e.g. Live Server on :5500)
-  // talks to Django on the same host, port 8000, so cookies stay "same-site".
-  App.API_URL = configured || (location.port === '8000' ? '/api' : `${location.protocol}//${location.hostname}:8000/api`);
+  // In local dev (e.g. Live Server on :5500), talk to Django on :8000. In production (same origin) or on :8000, use relative /api.
+  App.API_URL = configured || (
+    ['5500', '5501', '3000', '8080'].includes(location.port)
+      ? `${location.protocol}//${location.hostname}:8000/api`
+      : '/api'
+  );
   const SESSION_KEY = 'pp_session';
 
   /* ------------------------------------------------------------------ *

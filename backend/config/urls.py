@@ -17,22 +17,19 @@ Including another URLconf
 # backend/config/urls.py
 
 from django.contrib import admin
-from django.urls import path, include
+from django.urls import path, include, re_path
 from django.conf import settings
-from django.urls import re_path
+from django.views.generic import RedirectView
 from django.views.static import serve
 
 urlpatterns = [
+    path('', RedirectView.as_view(url='/index.html', permanent=False)),
     path('admin/', admin.site.urls),
     path('api/', include('accounts.urls')),
     path('api/', include('payroll.urls')),
     path('api/', include('workforce.urls')),
     path('api/', include('assistant.urls')),
+    # Only profile photos are served publicly. Employee documents are private
+    # and are streamed through an authenticated API endpoint instead.
+    re_path(r'^media/(?P<path>profile_photos/.*)$', serve, {'document_root': settings.MEDIA_ROOT}),
 ]
-
-if settings.DEBUG:
-    # Only profile photos are served publicly (development only). Employee documents
-    # are private and are streamed through an authenticated API endpoint instead.
-    urlpatterns += [
-        re_path(r'^media/(?P<path>profile_photos/.*)$', serve, {'document_root': settings.MEDIA_ROOT}),
-    ]

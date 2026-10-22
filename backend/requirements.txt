@@ -6,4 +6,7 @@ reportlab>=4.2,<5.0
 google-auth>=2.30,<3.0
 requests>=2.31,<3.0
 openpyxl>=3.1,<4.0
+gunicorn>=21.2,<24.0
+whitenoise>=6.6,<7.0
+dj-database-url>=2.1,<4.0
 pip-system-certs>=4.0; sys_platform == 'win32'

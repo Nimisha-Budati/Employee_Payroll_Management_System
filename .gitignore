@@ -7,3 +7,4 @@ backend/media/
 .DS_Store
 _backup_original/
 _to_delete/
+backend/staticfiles/

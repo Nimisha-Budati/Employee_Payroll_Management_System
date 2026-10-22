@@ -1,0 +1,26 @@
+databases:
+  - name: payrollpro-db
+    databaseName: employee_payroll
+    user: payroll_user
+    plan: free
+
+services:
+  - type: web
+    name: payrollpro
+    runtime: python
+    plan: free
+    buildCommand: "./build.sh"
+    startCommand: "gunicorn --chdir backend config.wsgi:application"
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: payrollpro-db
+          property: connectionString
+      - key: DJANGO_SECRET_KEY
+        generateValue: true
+      - key: DJANGO_DEBUG
+        value: "False"
+      - key: PYTHON_VERSION
+        value: 3.12.0
+      - key: GEMINI_API_KEY
+        sync: false
