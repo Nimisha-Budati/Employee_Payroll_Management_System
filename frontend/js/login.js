@@ -77,6 +77,9 @@
     const select = $('#registerCompany');
     const field = $('#registerCompanyField');
     if (!select || !field) return;
+    // Show the field immediately with a loading placeholder
+    select.innerHTML = '<option value="">Loading companies…</option>';
+    field.hidden = false;
     try {
       const data = await api.get('/companies/public/', undefined, { auth: false });
       companiesList = (data.companies || []).sort((a, b) => a.name.localeCompare(b.name));
@@ -84,18 +87,17 @@
         field.hidden = true;
         return;
       }
-      select.innerHTML = '<option value="">Select your company</option>' +
+      select.innerHTML = '<option value="">— Select your company —</option>' +
         companiesList.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
       if (companiesList.length === 1) {
         select.value = String(companiesList[0].id);
       }
       field.hidden = false;
     } catch {
+      select.innerHTML = '<option value="">Could not load companies — please refresh</option>';
       field.hidden = false;
-      select.innerHTML = '<option value="">Could not load companies — refresh to retry</option>';
     }
   }
-  loadCompanies();
 
   $('#registerForm').addEventListener('submit', async event => {
     event.preventDefault();
