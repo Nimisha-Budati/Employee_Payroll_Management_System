@@ -16,7 +16,7 @@ For installation and configuration, see the [README](../README.md).
 
 1. [Roles and access](#1-roles-and-access)
 2. [Sign-in and accounts](#2-sign-in-and-accounts)
-   - 2.1 Sign in · 2.2 Remember me · 2.3 Self-registration · 2.4 Forgot password (OTP) · 2.5 Change password · 2.6 Brute-force lockout · 2.7 Sessions and sign-out · 2.8 Sign in with Google
+   - 2.1 Company registration · 2.2 Sign in · 2.3 Remember me · 2.4 Employee self-registration · 2.5 Forgot password (OTP) · 2.6 Change password · 2.7 Brute-force lockout · 2.8 Sessions and sign-out · 2.9 Sign in with Google
 3. [Dashboards](#3-dashboards)
 4. [Employee management](#4-employee-management)
 5. [GPS attendance](#5-gps-attendance)
@@ -74,15 +74,39 @@ PayrollPro has two roles. Every account has exactly one.
 
 ## 2. Sign-in and accounts
 
-### 2.1 Sign in
+### 2.1 Company registration
+
+**Page:** `company-register.html` · **API:** `POST /api/companies/register/`
+
+Allows a company to set up its organization workspace on PayrollPro.
+
+**How it works**
+1. Navigate to "Register a company" from the login page or directly at `company-register.html`.
+2. Enter the **Company name**, **Admin username**, **Admin email address**, **Password**, and **Confirm password**.
+3. Client-side validation checks that the password is at least 8 characters long and that both passwords match before submitting.
+4. On submission, the backend executes an atomic database transaction:
+   - Creates the `Company` record.
+   - Creates the initial `User` and `UserProfile` with role `ADMIN`, assigned to the new company.
+   - Seeds isolated default settings for the tenant:
+     - `LeavePolicySettings` (annual leave policies, default rules, and carry-forward limits)
+     - `OnboardingSettings` (default document and information checklists)
+     - `ReminderSettings` (automated document expiry and approval reminder intervals)
+     - `AttendanceSettings` (geofenced office coordinates, radius, and attendance status)
+     - Initial standard `LeaveType` records: Casual (12 paid days), Sick (12 paid days), Earned (15 paid days), and Other (unlimited unpaid)
+     - `AIKnowledgeBase` (tenant-specific context and policy guidelines for the AI assistant)
+5. Automatically resets table sequence counters for the new tenant to prevent key collision issues.
+6. Writes a `CREATE` action under module `Company` to the audit log.
+7. Logs the new administrator in and redirects directly to `admin-dashboard.html`.
+
+### 2.2 Sign in
 
 **Page:** `index.html` · **API:** `POST /api/login/`
 
 **How it works**
 1. Choose **Employee** or **Administrator** with the switch at the top of the form. The button text changes to "Sign in as employee" / "Sign in as administrator".
 2. Enter your **username or email** and password. The eye icon shows or hides the password.
-3. Optionally tick **Remember me** (see 2.2).
-4. On success you go straight to your dashboard.
+3. Optionally tick **Remember me** (see 2.3).
+4. On success you go straight to your dashboard. The login response returns your role, full name, username, and company name.
 
 **Rules**
 - The login type must match the account's role. An employee choosing "Administrator" (or the reverse) gets *"Incorrect login type"*.
@@ -90,27 +114,36 @@ PayrollPro has two roles. Every account has exactly one.
 - A wrong username or password always shows the same message, *"Invalid username or password"*, so nobody can find out which usernames exist.
 - If you are already signed in and open the sign-in page, you are taken straight to your dashboard.
 
-### 2.2 Remember me
+### 2.3 Remember me
 
 When ticked, the session lasts 7 days (configurable with `SESSION_COOKIE_AGE`). When not ticked, the session ends when the browser is closed. The same option applies to Google sign-in.
 
-### 2.3 Self-registration
+### 2.4 Employee self-registration
 
-**Page:** `index.html` → "Create an account" (shown only when *Employee* is selected) · **API:** `POST /api/register/`
+**Page:** `index.html` → "Create employee account" (shown only when *Employee* is selected) · **API:** `POST /api/register/`, `GET /api/companies/public/`
 
 **How it works**
-1. Enter a username, email, password and the password again.
-2. The account is created as an **Employee** and you can sign in immediately.
-3. You receive a *"Welcome to PayrollPro"* notification.
-4. The account appears to administrators as a **pending account** (see [4.3 Onboarding](#43-onboarding-self-registered-accounts)). Until an admin completes the employment record, your dashboard shows a warning, and payroll, attendance and leave don't apply to you yet.
+1. When opening the registration form, the application queries `GET /api/companies/public/` to retrieve all registered companies. The companies are sorted alphabetically (A→Z) and presented in the **Company** dropdown:
+   - If only **one company** exists on the server, it is automatically pre-selected.
+   - If **multiple companies** exist, the employee selects which organization they are joining from the dropdown list.
+   - If no companies are registered yet, the field is safely hidden.
+2. Enter a unique username, valid email address, password (minimum 8 characters), and confirm the password. Client-side checks validate password length and matching before dispatching the request.
+3. On submission:
+   - The server validates the fields, verifies that the selected `company_id` exists, and enforces password strength validators.
+   - The `User` is created and their `UserProfile` is immediately linked to the chosen `Company` with the `EMPLOYEE` role.
+   - All administrators of that company receive an immediate in-app notification: *"{username} ({email}) registered an employee account and is waiting for onboarding."*
+   - The employee receives a welcome notification: *"Your employee account is ready at {company_name}. An administrator will complete your employment record."*
+4. The account appears in the company administrator's dashboard under **pending onboarding** counts and in `employee-management.html` under **pending accounts** (see [4.3 Onboarding](#43-onboarding-self-registered-accounts)).
+5. Until an administrator completes the employment record (adding employee ID, department, designation, etc.), the employee dashboard displays an alert that an administrator from their company will finalize their record.
 
 **Rules**
-- Only employee accounts can be registered publicly. Administrator registration is refused.
+- Only employee accounts can be registered publicly. Administrator registration attempts are refused with HTTP 403 Forbidden.
 - Username: up to 150 characters; letters, numbers and `@ . + - _` only; must be unique (case-insensitive).
-- Email: must be valid and unique.
-- Password must pass Django's strength checks: minimum length, not a common password, not entirely numeric, not too similar to the username or email.
+- Email: must be valid and unique across the platform.
+- Company selection is required whenever companies are registered on the system.
+- Password must pass Django's strength checks: minimum length (at least 8 characters), not common, not entirely numeric, not too similar to username/email.
 
-### 2.4 Forgot password (OTP)
+### 2.5 Forgot password (OTP)
 
 **Page:** `index.html` → "Forgot password?" · **API:** `POST /api/password/forgot/`, `/api/password/verify-otp/`, `/api/password/reset/`
 
@@ -124,17 +157,17 @@ When ticked, the session lasts 7 days (configurable with `SESSION_COOKIE_AGE`). 
 - Codes expire after **10 minutes** and allow **5 attempts**. After that you must request a new code.
 - Requesting a new code invalidates any earlier one.
 - Codes are stored only as a hash, never in plain text.
-- Code requests are rate-limited (see 2.6).
+- Code requests are rate-limited (see 2.7).
 - The new password must pass the same strength checks as registration.
 - Google-only accounts (which have no password) can use this flow to set one.
 
-### 2.5 Change password
+### 2.6 Change password
 
 **Page:** `settings.html` · **API:** `POST /api/password/change/`
 
 Enter your current password, a new password and the new password again. The current password must be correct and the new one must pass the strength checks. You stay signed in after the change.
 
-### 2.6 Brute-force lockout
+### 2.7 Brute-force lockout
 
 After **5 failed attempts** within the lockout window, the same route is locked for **15 minutes**, counted both per IP address and per username/email. This applies to:
 - password sign-in (failed logins)
@@ -143,13 +176,13 @@ After **5 failed attempts** within the lockout window, the same route is locked 
 
 The user sees *"Too many failed attempts. Please wait a few minutes before trying again."* A successful sign-in clears the counter. Both limits can be changed with `LOGIN_MAX_FAILED_ATTEMPTS` and `LOGIN_LOCKOUT_SECONDS`.
 
-### 2.7 Sessions and sign-out
+### 2.8 Sessions and sign-out
 
 - Sign-in creates a secure, HttpOnly session cookie; JavaScript cannot read it.
 - **Sign out** is in the user menu (top right) and on the Settings page. It ends the server session and clears the browser's stored state.
 - When a session expires, the next action sends you back to the sign-in page with an explanation.
 
-### 2.8 Sign in with Google
+### 2.9 Sign in with Google
 
 **Pages:** `index.html` ("Continue with Google", "Sign up with Google"), `settings.html` (connect/disconnect), `google-callback.html` · **API:** `/api/auth/google/config/`, `start/`, `callback/`, `link/`
 
@@ -262,9 +295,9 @@ On save, a login account (role Employee) and the employee record are created tog
 
 ### 4.3 Onboarding self-registered accounts
 
-People who registered themselves (or signed up with Google) have a login but no employee record. The page shows a banner, *"N registered accounts waiting for an employee record"*, with a button for each person.
+People who registered themselves (or signed up with Google) have a login but no employee record yet. The page shows a banner, *"N registered accounts waiting for an employee record"*, with a button for each person. The list includes all pending employees assigned to this company as well as any legacy accounts awaiting company assignment.
 
-Clicking a person opens **Complete employee record**. Their existing login is reused (no new username or password), and you fill in the personal and employment details. After saving, they appear in the employee list and can be included in payroll.
+Clicking a person opens **Complete employee record**. Their existing login is reused (no new username or password), their profile is associated with the company, and you fill in the personal and employment details (Employee ID, joining date, department, designation, phone). After saving, they appear in the active employee list, can be assigned shifts and salary structures, and are included in monthly payroll.
 
 ### 4.4 Edit employee
 

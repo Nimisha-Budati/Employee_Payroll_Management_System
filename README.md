@@ -34,8 +34,8 @@ PayrollPro is a web application for running a small company's HR and payroll in 
 | Separate admin and employee sign-in | The login page has an *Administrator* / *Employee* switch. Signing in with the wrong type is refused. |
 | Username **or** email login | Either one can be used in the username field. |
 | Remember me | Keeps the session for 7 days (configurable); otherwise it ends when the browser closes. |
-| Company registration | A company administrator registers the organization and its first administrator. Company settings, leave types, attendance settings and AI knowledge are created for that tenant. |
-| Employee self-registration | Anyone can register an **unassigned Employee** account. A company administrator can attach the account during onboarding; public registration cannot create administrators. |
+| Company registration | A company administrator registers the organization and its first administrator via `company-register.html`. Automatically provisions isolated tenant settings, default leave types, geofenced attendance rules, onboarding checklists, reminders, and an AI knowledge base. |
+| Employee self-registration | Employees can register an account from `index.html`. An alphabetical company dropdown (`GET /api/companies/public/`) allows selecting which organization they belong to (auto-selected if only one company exists). Company administrators are immediately notified and can onboard the employee. Public registration cannot create administrators. |
 | Forgot password with OTP | A 6-digit code is emailed (printed to the server console when email is not configured). It expires in 10 minutes and allows 5 attempts. After verifying, the user sets a new password. |
 | Change password | From **Settings**, using the current password. The session stays signed in. |
 | Password strength | Django's validators: minimum length, not too common, not all numbers, not similar to the username/email. |
@@ -329,10 +329,10 @@ Employee_Payroll_Management_System/
 | Admin | Employee | Shared |
 | --- | --- | --- |
 | `admin-dashboard.html` – Dashboard | `employee-dashboard.html` – Dashboard | `index.html` – Sign in / Register |
-| `employee-management.html` – Employees | `employee-attendance.html` – Attendance | `announcements.html` – Announcements |
-| `admin-attendance.html` – Attendance | `employee-leave.html` – Leave | `chat.html` – Messages |
+| `employee-management.html` – Employees | `employee-attendance.html` – Attendance | `company-register.html` – Register company |
+| `admin-attendance.html` – Attendance | `employee-leave.html` – Leave | `announcements.html` – Announcements |
 | `admin-leave.html` – Leave requests | `employee-wfh.html` – Work from home | `notifications.html` – Notifications |
-| `admin-leave-policy.html` – Leave policy | | |
+| `admin-leave-policy.html` – Leave policy | | `chat.html` – Messages |
 | `admin-wfh.html` – Work from home | `employee-documents.html` – Documents | `settings.html` – Settings |
 | `admin-documents.html` – Documents | `employee-payslips.html` – Payslips | `google-callback.html` – Google sign-in return |
 | `admin-payroll.html` – Payroll runs | `employee-holidays.html` – Holiday calendar | |
@@ -480,7 +480,10 @@ All endpoints are under `/api/`. Authentication is by session cookie. Unsafe req
 | Method | Endpoint | Description |
 | --- | --- | --- |
 | GET | `csrf/` | Get the CSRF token and cookie |
-| POST | `register/` | Register an employee account |
+| POST | `companies/register/` | Register an organization tenant and its first administrator (`company_name`, `username`, `email`, `password`, `confirm_password`) |
+| GET | `companies/public/` | Public list of registered companies ordered alphabetically (`[{id, name}, ...]`) |
+| GET, PUT | `company/` | Admin: View or update tenant company profile |
+| POST | `register/` | Register an employee account (`username`, `email`, `password`, `confirm_password`, `company_id`) |
 | POST | `login/` | Sign in (`username` or email, `password`, `role`, `remember_me`) |
 | POST | `logout/` | Sign out |
 | POST | `password/forgot/` | Send a password-reset code |
@@ -636,4 +639,4 @@ Reminders can be scheduled daily (for example with Windows Task Scheduler):
 python manage.py send_reminders
 ```
 
-The suite (203 tests) covers the payroll variance review and the review required before finalising, attendance correction requests, the team calendar, onboarding checklists, document expiry and reminders, notification preferences, audit filters and append-only audit entries, analytics and its Excel export, the admin-controlled leave policy (types, limits, leave year, carry forward, adjustments, validation, cancellation), AI chat rename/pin/search, authentication and permissions, employees, leave, attendance and late minutes, shifts, overtime approval and its payroll integration, DA/bonus calculations, documents, Google sign-in, notifications with expiry, audit coverage, Excel exports, the AI assistants (with the Gemini HTTP call stubbed), and the payroll calculator, runs, adjustments, finalisation, PDFs, exports and reports. Uploaded test files go to a temporary folder, not `backend/media/`.
+The suite (205 tests) covers multi-company tenant isolation and company registration sequences, the payroll variance review and the review required before finalising, attendance correction requests, the team calendar, onboarding checklists, document expiry and reminders, notification preferences, audit filters and append-only audit entries, analytics and its Excel export, the admin-controlled leave policy (types, limits, leave year, carry forward, adjustments, validation, cancellation), AI chat rename/pin/search, authentication and permissions, employees, leave, attendance and late minutes, shifts, overtime approval and its payroll integration, DA/bonus calculations, documents, Google sign-in, notifications with expiry, audit coverage, Excel exports, the AI assistants (with the Gemini HTTP call stubbed), and the payroll calculator, runs, adjustments, finalisation, PDFs, exports and reports. Uploaded test files go to a temporary folder, not `backend/media/`.
