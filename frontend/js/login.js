@@ -74,23 +74,25 @@
 
   let companiesList = [];
   async function loadCompanies() {
+    const select = $('#registerCompany');
+    const field = $('#registerCompanyField');
+    if (!select || !field) return;
     try {
       const data = await api.get('/companies/public/', undefined, { auth: false });
-      companiesList = data.companies || [];
-      const select = $('#registerCompany');
-      const field = $('#registerCompanyField');
-      if (!select || !field) return;
+      companiesList = (data.companies || []).sort((a, b) => a.name.localeCompare(b.name));
       if (!companiesList.length) {
         field.hidden = true;
         return;
       }
-      field.hidden = false;
-      select.innerHTML = App.html`<option value="">Select your company</option>${companiesList.map(c => App.html`<option value="${c.id}">${c.name}</option>`)}`;
+      select.innerHTML = '<option value="">Select your company</option>' +
+        companiesList.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
       if (companiesList.length === 1) {
         select.value = String(companiesList[0].id);
       }
+      field.hidden = false;
     } catch {
-      // Backend unreachable: handled on submit
+      field.hidden = false;
+      select.innerHTML = '<option value="">Could not load companies — refresh to retry</option>';
     }
   }
   loadCompanies();
