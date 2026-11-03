@@ -60,6 +60,11 @@ RENDER_EXTERNAL_HOSTNAME = os.environ.get('RENDER_EXTERNAL_HOSTNAME')
 if RENDER_EXTERNAL_HOSTNAME and RENDER_EXTERNAL_HOSTNAME not in ALLOWED_HOSTS:
     ALLOWED_HOSTS.append(RENDER_EXTERNAL_HOSTNAME)
 
+if not DEBUG:
+    for host in ('.onrender.com', 'localhost', '127.0.0.1'):
+        if host not in ALLOWED_HOSTS:
+            ALLOWED_HOSTS.append(host)
+
 
 # --- Applications -----------------------------------------------------------
 
@@ -190,6 +195,11 @@ if RENDER_EXTERNAL_HOSTNAME:
     if origin not in CORS_ALLOWED_ORIGINS:
         CORS_ALLOWED_ORIGINS.append(origin)
 
+if not DEBUG:
+    render_origin = 'https://*.onrender.com'
+    if render_origin not in CSRF_TRUSTED_ORIGINS:
+        CSRF_TRUSTED_ORIGINS.append(render_origin)
+
 CSRF_FAILURE_VIEW = 'accounts.auth_views.csrf_failure'
 SESSION_COOKIE_HTTPONLY = True
 SESSION_COOKIE_SAMESITE = 'Lax'
@@ -219,7 +229,7 @@ STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 STATIC_ROOT.mkdir(parents=True, exist_ok=True)
 WHITENOISE_ROOT = BASE_DIR.parent / 'frontend'
-WHITENOISE_INDEX_FILE = True
+WHITENOISE_INDEX_FILE = False
 
 STORAGES = {
     'default': {
