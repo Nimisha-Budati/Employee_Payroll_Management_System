@@ -2,14 +2,17 @@
   'use strict';
   const form = document.querySelector('#companyRegisterForm');
   const errorBox = document.querySelector('#companyRegisterError');
+  const okBox = document.querySelector('#companyRegisterOk');
   form.addEventListener('input', () => {
     errorBox.textContent = '';
     errorBox.hidden = true;
+    if (okBox) { okBox.textContent = ''; okBox.hidden = true; }
   });
   form.addEventListener('submit', async event => {
     event.preventDefault();
     errorBox.hidden = true;
     errorBox.textContent = '';
+    if (okBox) { okBox.hidden = true; okBox.textContent = ''; }
 
     const payload = Object.fromEntries(new FormData(form));
     const password = payload.password || '';
@@ -32,7 +35,13 @@
       const result = await App.api.post('/companies/register/', payload, { auth: false });
       App.api.resetCsrf();
       App.session.set({ username: result.username, role: 'ADMIN', fullName: result.full_name, companyName: result.company_name });
-      location.replace(App.session.home('ADMIN'));
+      if (okBox) {
+        okBox.textContent = `Company registered! Administrator username: "${result.username}". Redirecting to dashboard…`;
+        okBox.hidden = false;
+      }
+      setTimeout(() => {
+        location.replace(App.session.home('ADMIN'));
+      }, 1000);
     } catch (error) {
       errorBox.textContent = error.message || 'Company registration could not be completed.';
       errorBox.hidden = false;

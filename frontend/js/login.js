@@ -21,6 +21,7 @@
 
   function note(id, message) {
     const box = $(`#${id}`);
+    if (!box) return;
     box.textContent = message || '';
     box.hidden = !message;
   }
@@ -151,10 +152,19 @@
   const params = new URLSearchParams(location.search);
   if (params.get('google_error')) {
     const registering = params.get('view') === 'register';
-    if (registering) show('registerSection');
+    if (registering) {
+      show('registerSection');
+      loadCompanies();
+    }
     note(registering ? 'registerError' : 'loginError', App.googleErrorMessage(params.get('google_error')));
     history.replaceState(null, '', location.pathname);
+  } else if (params.get('view') === 'register') {
+    show('registerSection');
+    loadCompanies();
   }
+
+  // Pre-load public companies list in background for seamless employee signup
+  loadCompanies().catch(() => {});
 
   /* Password recovery: request code -> verify code -> choose new password */
   function recoveryStep(step) {

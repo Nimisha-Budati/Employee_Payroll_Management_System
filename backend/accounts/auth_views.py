@@ -49,13 +49,38 @@ def json_body(request):
     return data if isinstance(data, dict) else None
 
 
-def user_for_identifier(identifier):
+def user_for_identifier(identifier, role=None):
     if not identifier:
         return None
-    return (
-        User.objects.filter(email__iexact=identifier).first()
-        or User.objects.filter(username__iexact=identifier).first()
-    )
+    identifier = identifier.strip()
+    if role:
+        match = (
+            User.objects.filter(username__iexact=identifier, userprofile__role=role).first()
+            or User.objects.filter(email__iexact=identifier, userprofile__role=role).first()
+        )
+        if match:
+            return match
+    # 1. By username
+    user = User.objects.filter(username__iexact=identifier).first()
+    if user:
+        return user
+    # 2. By personal user email
+    user = User.objects.filter(email__iexact=identifier).first()
+    if user:
+        return user
+    # 3. By company email for company admin
+    company = Company.objects.filter(email__iexact=identifier).first()
+    if company:
+        admin_profile = company.profiles.filter(role='ADMIN').first()
+        if admin_profile:
+            return admin_profile.user
+    # 4. By full name
+    if ' ' in identifier:
+        first, _, last = identifier.partition(' ')
+        candidates = list(User.objects.filter(first_name__iexact=first, last_name__iexact=last))
+        if len(candidates) == 1:
+            return candidates[0]
+    return None
 
 
 def password_error(password, user=None):
@@ -211,13 +236,25 @@ def company_register(request):
         return JsonResponse({'error': 'A company is already registered with that email.'}, status=400)
     if User.objects.filter(email__iexact=admin_email).exists():
         return JsonResponse({'error': 'An account already exists with the administrator email.'}, status=400)
-    # Usernames remain unique under Django's existing model constraint; the numeric suffix is server-generated.
-    import re
-    base = re.sub(r'[^A-Za-z0-9@.+_-]', '', admin_email.split('@', 1)[0])[:140] or 'companyadmin'
-    username, suffix = base, 1
-    while User.objects.filter(username__iexact=username).exists():
-        username = f'{base[:140 - len(str(suffix))]}{suffix}'
-        suffix += 1
+    admin_username = _text(data, 'username') or _text(data, 'admin_username')
+    if admin_username:
+        try:
+            User.username_validator(admin_username)
+        except ValidationError:
+            return JsonResponse({'error': 'Username may only contain letters, numbers and @/./+/-/_ characters.'}, status=400)
+        if len(admin_username) > 150:
+            return JsonResponse({'error': 'Username must be 150 characters or fewer.'}, status=400)
+        if User.objects.filter(username__iexact=admin_username).exists():
+            return JsonResponse({'error': 'That username is already taken. Please choose another.'}, status=400)
+        username = admin_username
+    else:
+        # Usernames remain unique under Django's existing model constraint; the numeric suffix is server-generated.
+        import re
+        base = re.sub(r'[^A-Za-z0-9@.+_-]', '', admin_email.split('@', 1)[0])[:140] or 'companyadmin'
+        username, suffix = base, 1
+        while User.objects.filter(username__iexact=username).exists():
+            username = f'{base[:140 - len(str(suffix))]}{suffix}'
+            suffix += 1
     first_name, _, last_name = admin_name.partition(' ')
     error = password_error(password, User(
         username=username,
@@ -247,7 +284,7 @@ def company_register(request):
                                      description=description, sort_order=order)
         from assistant.models import AIKnowledgeBase
         AIKnowledgeBase.objects.create(company=company)
-        login(request, user)
+        login(request, user, backend='accounts.backends.EmailOrUsernameModelBackend')
         request.session.set_expiry(settings.SESSION_COOKIE_AGE)
     return JsonResponse({'message': 'Company registered successfully', 'username': username,
                          'email': user.email, 'role': 'ADMIN', 'full_name': admin_name,
@@ -275,12 +312,14 @@ def login_user(request):
             status=429,
         )
 
-    user_record = user_for_identifier(identifier)
+    user_record = user_for_identifier(identifier, role=role)
     user = authenticate(
         request,
         username=user_record.username if user_record else identifier,
         password=password,
     )
+    if user is None and user_record:
+        user = authenticate(request, username=identifier, password=password)
     if user is None:
         # Inactive users never authenticate; report the same generic message to avoid account enumeration.
         register_failure('login', ip, identifier)
@@ -360,7 +399,7 @@ def verify_password_reset(request):
     if data is None:
         return _bad_json()
     user = user_for_identifier(_text(data, 'email'))
-    reset = PasswordResetOTP.objects.filter(user=user, verified=False).order_by('-created_at').first() if user else None
+    reset = PasswordResetOTP.objects.filter(user=user, verified=False).order_by('-id').first() if user else None
     if reset is None or reset.is_expired():
         return JsonResponse({'error': 'OTP is invalid or expired'}, status=400)
     if reset.attempts >= 5:

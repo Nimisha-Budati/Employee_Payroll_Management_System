@@ -20,6 +20,7 @@
     <p>Company registration creates the first administrator account for this company.</p>
     <form id="companyRegisterForm" class="stack-sm" novalidate>
       <div class="alert alert-danger" id="companyRegisterError" role="alert" hidden></div>
+      <div class="alert alert-success" id="companyRegisterOk" role="status" hidden></div>
       <fieldset class="stack-sm"><legend>Company details</legend>
         <div class="field"><label for="companyNameInput">Company name</label><input class="input" id="companyNameInput" name="company_name" maxlength="160" required></div>
         <div class="field"><label for="companyEmail">Company email</label><input class="input" id="companyEmail" name="company_email" type="email" autocomplete="email" required></div>
@@ -28,6 +29,7 @@
       </fieldset>
       <fieldset class="stack-sm"><legend>First administrator</legend>
         <div class="field"><label for="adminName">Full name</label><input class="input" id="adminName" name="admin_name" autocomplete="name" maxlength="150" required></div>
+        <div class="field"><label for="adminUsername">Username <span class="hint">Optional — leave blank to generate from email</span></label><input class="input" id="adminUsername" name="admin_username" autocomplete="username" maxlength="150"></div>
         <div class="field"><label for="adminEmail">Email</label><input class="input" id="adminEmail" name="admin_email" type="email" autocomplete="email" required></div>
         <div class="field">
           <label for="adminPassword">Password</label>
