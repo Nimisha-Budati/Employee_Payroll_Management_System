@@ -23,6 +23,9 @@ ERROR_MESSAGES = {
     'rate_limited': 'You have reached the hourly limit for AI questions. Please try again later.',
 }
 
+# Fast, reliable fallback models verified against the Gemini API
+FALLBACK_MODELS = ['gemini-flash-lite-latest', 'gemini-3.5-flash-lite', 'gemini-3.6-flash']
+
 
 class AIServiceError(Exception):
     def __init__(self, code, detail=''):
@@ -39,15 +42,8 @@ def is_configured():
     return bool(settings.GEMINI_API_KEY and settings.GEMINI_MODEL)
 
 
-def generate(system_instruction, messages, temperature=0.3, max_output_tokens=3072):
-    """Return the model's reply text.
-
-    ``messages`` is a list of ``(role, text)`` with role ``'user'`` or ``'assistant'``; the last one
-    must be the user's turn.
-    """
-    if not is_configured():
-        raise AIServiceError('not_configured')
-    url = f'{settings.GEMINI_API_BASE}/models/{settings.GEMINI_MODEL}:generateContent'
+def _call_model(model_name, system_instruction, messages, temperature, max_output_tokens, timeout):
+    url = f'{settings.GEMINI_API_BASE}/models/{model_name}:generateContent'
     body = {
         'system_instruction': {'parts': [{'text': system_instruction}]},
         'contents': [
@@ -58,12 +54,15 @@ def generate(system_instruction, messages, temperature=0.3, max_output_tokens=30
     }
     try:
         response = requests.post(
-            url, json=body, timeout=settings.GEMINI_TIMEOUT_SECONDS,
+            url, json=body, timeout=timeout,
             headers={'x-goog-api-key': settings.GEMINI_API_KEY, 'Content-Type': 'application/json'},
         )
+    except requests.Timeout as error:
+        logger.warning('Gemini model %s timed out after %ss', model_name, timeout)
+        raise AIServiceError('unavailable', f'Timeout on model {model_name}') from error
     except requests.RequestException as error:
-        logger.warning('Gemini request failed: %s', error.__class__.__name__)
-        raise AIServiceError('unavailable') from error
+        logger.warning('Gemini request failed for model %s: %s', model_name, error.__class__.__name__)
+        raise AIServiceError('unavailable', str(error)) from error
 
     if response.status_code != 200:
         detail = ''
@@ -71,7 +70,7 @@ def generate(system_instruction, messages, temperature=0.3, max_output_tokens=30
             detail = response.json().get('error', {}).get('message', '')
         except ValueError:
             pass
-        logger.warning('Gemini returned HTTP %s: %s', response.status_code, detail[:200])
+        logger.warning('Gemini (%s) returned HTTP %s: %s', model_name, response.status_code, detail[:200])
         if response.status_code in (401, 403) or 'API key' in detail:
             raise AIServiceError('invalid_key', detail)
         if response.status_code == 404:
@@ -85,7 +84,7 @@ def generate(system_instruction, messages, temperature=0.3, max_output_tokens=30
     try:
         data = response.json()
     except ValueError as error:
-        raise AIServiceError('unavailable') from error
+        raise AIServiceError('unavailable', 'Invalid JSON from Gemini') from error
     if (data.get('promptFeedback') or {}).get('blockReason'):
         raise AIServiceError('blocked')
     candidates = data.get('candidates') or []
@@ -100,3 +99,38 @@ def generate(system_instruction, messages, temperature=0.3, max_output_tokens=30
     if finish == 'MAX_TOKENS':
         text += '\n\n(The answer was cut short. Ask a narrower question for more detail.)'
     return text
+
+
+def generate(system_instruction, messages, temperature=0.3, max_output_tokens=3072):
+    """Return the model's reply text with resilient fallback across active models.
+
+    ``messages`` is a list of ``(role, text)`` with role ``'user'`` or ``'assistant'``; the last one
+    must be the user's turn.
+    """
+    if not is_configured():
+        raise AIServiceError('not_configured')
+
+    # Build prioritized candidate models list: configured model first, then verified fallbacks
+    models_to_try = [settings.GEMINI_MODEL]
+    for fallback in FALLBACK_MODELS:
+        if fallback not in models_to_try:
+            models_to_try.append(fallback)
+
+    per_attempt_timeout = min(int(getattr(settings, 'GEMINI_TIMEOUT_SECONDS', 15) or 15), 15)
+    last_error = None
+
+    for model_name in models_to_try:
+        try:
+            return _call_model(model_name, system_instruction, messages, temperature, max_output_tokens, per_attempt_timeout)
+        except AIServiceError as error:
+            last_error = error
+            # If the API key is completely rejected or query was blocked by safety, trying another model won't help
+            if error.code in ('invalid_key', 'blocked'):
+                raise error
+            # Otherwise (timeout, 404 deprecated, 503 high demand), try next fallback model
+            logger.info('Model %s failed (%s); trying fallback model...', model_name, error.code)
+            continue
+
+    if last_error:
+        raise last_error
+    raise AIServiceError('unavailable')

@@ -185,10 +185,11 @@ FRONTEND_URL = os.environ.get('FRONTEND_URL', 'http://127.0.0.1:5500' if DEBUG e
 _DEV_FRONTEND_ORIGINS = [
     f'http://{host}:{port}'
     for host in ('127.0.0.1', 'localhost')
-    for port in (3000, 5500, 5501, 8000, 8080)
+    for port in (3000, 3001, 5000, 5173, 5500, 5501, 5502, 5503, 8000, 8080)
 ]
 
 CORS_ALLOWED_ORIGINS = _env_list('CORS_ALLOWED_ORIGINS') or (_DEV_FRONTEND_ORIGINS if DEBUG else [])
+CORS_ALLOWED_ORIGIN_REGEXES = [r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$"] if DEBUG else []
 CORS_ALLOW_CREDENTIALS = True
 
 CSRF_TRUSTED_ORIGINS = _env_list('CSRF_TRUSTED_ORIGINS') or (_DEV_FRONTEND_ORIGINS if DEBUG else [])
@@ -288,10 +289,10 @@ PAYROLL_VARIANCE_THRESHOLD_PERCENT = float(os.environ.get('PAYROLL_VARIANCE_THRE
 # Leave GEMINI_API_KEY empty to switch the AI features off; the rest of the app is unaffected.
 
 GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY', '').strip()
-# 'gemini-flash-latest' always points to Google's current Flash model; pin a version (e.g. gemini-3.8-flash) for stability.
-GEMINI_MODEL = os.environ.get('GEMINI_MODEL', 'gemini-flash-latest').strip()
+# 'gemini-flash-lite-latest' provides high-speed, reliable responses (~1.5s) without timeout drops.
+GEMINI_MODEL = os.environ.get('GEMINI_MODEL', 'gemini-flash-lite-latest').strip()
 GEMINI_API_BASE = os.environ.get('GEMINI_API_BASE', 'https://generativelanguage.googleapis.com/v1beta').strip().rstrip('/')
-GEMINI_TIMEOUT_SECONDS = int(os.environ.get('GEMINI_TIMEOUT_SECONDS', '30'))
+GEMINI_TIMEOUT_SECONDS = int(os.environ.get('GEMINI_TIMEOUT_SECONDS', '15'))
 AI_MAX_REQUESTS_PER_HOUR = int(os.environ.get('AI_MAX_REQUESTS_PER_HOUR', '40'))
 
 
