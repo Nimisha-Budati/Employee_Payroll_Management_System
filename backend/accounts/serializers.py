@@ -526,7 +526,7 @@ class NotificationSerializer(serializers.ModelSerializer):
 class AttendanceSettingsSerializer(serializers.ModelSerializer):
     class Meta:
         model = AttendanceSettings
-        fields = ['latitude', 'longitude', 'radius_meters', 'is_enabled', 'updated_at']
+        fields = ['latitude', 'longitude', 'radius_meters', 'is_enabled', 'location_name', 'updated_at']
         read_only_fields = ['updated_at']
 
     def validate(self, data):

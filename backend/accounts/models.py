@@ -441,6 +441,7 @@ class AttendanceSettings(models.Model):
     company = models.ForeignKey(Company, null=True, on_delete=models.CASCADE, related_name='attendance_settings')
     latitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
     longitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    location_name = models.CharField(max_length=255, blank=True, default='')
     radius_meters = models.PositiveIntegerField(default=100)
     is_enabled = models.BooleanField(default=False)
     updated_at = models.DateTimeField(auto_now=True)

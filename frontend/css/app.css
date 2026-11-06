@@ -712,3 +712,182 @@ button.cal-day:hover { background: var(--surface-hover); }
 
 button.stat { font: inherit; text-align: left; cursor: pointer; width: 100%; }
 button.stat:hover { border-color: var(--border-strong); }
+
+/* ---- Interactive Attendance Map & Location Picker ---- */
+dialog.modal.map-modal {
+  width: min(880px, calc(100vw - 32px));
+  max-width: 880px;
+}
+.map-picker-container {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.map-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  position: relative;
+}
+.map-search-wrap {
+  position: relative;
+  flex: 1 1 280px;
+}
+.map-search-wrap .input {
+  width: 100%;
+  padding-left: 36px;
+  padding-right: 32px;
+}
+.map-search-icon {
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-muted);
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+}
+.map-search-clear {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: 0;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 4px;
+  display: none;
+  border-radius: 50%;
+  line-height: 1;
+}
+.map-search-clear:hover {
+  color: var(--text);
+}
+.map-search-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-pop);
+  max-height: 220px;
+  overflow-y: auto;
+  z-index: 1050;
+  display: none;
+  list-style: none;
+  padding: 4px 0;
+  margin: 0;
+}
+.map-search-dropdown li {
+  padding: 8px 12px;
+  font-size: 13px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  border-bottom: 1px solid var(--border);
+  transition: background 0.15s ease;
+}
+.map-search-dropdown li:last-child {
+  border-bottom: none;
+}
+.map-search-dropdown li:hover,
+.map-search-dropdown li.selected {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.map-search-dropdown .res-name {
+  font-weight: 550;
+  color: var(--text);
+}
+.map-search-dropdown .res-sub {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.attendance-map {
+  width: 100%;
+  height: 380px;
+  min-height: 280px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  overflow: hidden;
+  position: relative;
+  z-index: 1;
+  background: var(--surface-muted);
+}
+[data-theme="dark"] .attendance-map .leaflet-tile {
+  filter: brightness(0.78) invert(1) contrast(1.1) hue-rotate(170deg) saturate(0.85);
+}
+[data-theme="dark"] .leaflet-container {
+  background: #111a16;
+}
+.map-info-card {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border-radius: var(--radius-md);
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-muted);
+  font-size: 13.5px;
+}
+.map-location-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text);
+  font-weight: 550;
+  flex: 1 1 auto;
+}
+.map-coords-badge {
+  font-family: var(--font-mono, monospace);
+  font-size: 12px;
+  color: var(--text-muted);
+  background: var(--surface);
+  padding: 3px 8px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  white-space: nowrap;
+}
+.radius-slider-group {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 12px;
+  align-items: center;
+}
+.radius-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+.radius-pill {
+  font-size: 12px;
+  padding: 3px 9px;
+  border-radius: 99px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.radius-pill:hover,
+.radius-pill.active {
+  background: var(--accent);
+  color: var(--on-accent);
+  border-color: var(--accent);
+}
+.map-helper-tip {
+  font-size: 12.5px;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}

@@ -14,6 +14,16 @@
   const shiftHours = shift => `${shift.start_time.slice(0, 5)} – ${shift.end_time.slice(0, 5)}`;
   const lateCell = minutes => (minutes == null ? html`<span class="muted">—</span>` : minutes > 0 ? html`<span class="badge badge-warning">${minutes} min</span>` : html`<span class="badge badge-success">On time</span>`);
 
+  function calculateDistance(lat1, lon1, lat2, lon2) {
+    const R = 6371000;
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+              Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+              Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    return Math.round(2 * R * Math.asin(Math.sqrt(a)));
+  }
+
   function locate() {
     return new Promise((resolve, reject) => {
       if (!navigator.geolocation) return reject(new Error('Your browser does not support location access.'));
@@ -25,16 +35,45 @@
     });
   }
 
+  async function checkProximity(containerEl) {
+    if (!status || !status.attendance_enabled || status.latitude == null || status.longitude == null) return;
+    const statusBox = $('#proximityStatus');
+    if (!statusBox) return;
+    statusBox.innerHTML = '<span class="muted"><span class="spinner"></span> Checking GPS distance from office…</span>';
+    try {
+      const pos = await locate();
+      const dist = calculateDistance(pos.latitude, pos.longitude, status.latitude, status.longitude);
+      const isInside = dist <= status.radius_meters;
+      const locLabel = status.location_name ? `the designated location (${status.location_name})` : 'the office';
+      if (isInside) {
+        statusBox.innerHTML = html`<div class="alert alert-success" style="margin-top:12px">${icon('check')} <span><strong>Inside permitted area:</strong> You are ${dist} m from ${locLabel} (within allowed ${status.radius_meters} m). You can check in/out.</span></div>`;
+      } else {
+        statusBox.innerHTML = html`<div class="alert alert-warning" style="margin-top:12px">${icon('alert')} <span><strong>Outside permitted area:</strong> You are ${dist} m from ${locLabel}. You must be within ${status.radius_meters} m to mark attendance (${dist - status.radius_meters} m too far).</span></div>`;
+      }
+    } catch (err) {
+      statusBox.innerHTML = html`<div class="alert alert-danger" style="margin-top:12px">${icon('alert')} <span>Could not check distance: ${err.message}</span></div>`;
+    }
+  }
+
   async function mark(action, button) {
     const original = button.innerHTML;
-    button.disabled = true; button.innerHTML = '<span class="spinner"></span> Getting location…';
+    button.disabled = true; button.innerHTML = '<span class="spinner"></span> Verifying location…';
+    const statusBox = $('#proximityStatus');
     try {
       const position = await locate();
       const record = await api.post(`/attendance/${action}/`, position);
+      if (statusBox) statusBox.innerHTML = '';
       if (action === 'check-in' && record.late_minutes > 0) App.toast(`Checked in, ${record.late_minutes} min after your shift start.`, 'error');
-      else App.toast(action === 'check-in' ? 'Checked in.' : 'Checked out.');
+      else App.toast(action === 'check-in' ? 'Checked in successfully.' : 'Checked out successfully.');
       await Promise.all([loadStatus(), loadHistory(), loadMonth()]);
-    } catch (error) { App.error(error); button.disabled = false; button.innerHTML = original; }
+    } catch (error) {
+      App.error(error);
+      button.disabled = false;
+      button.innerHTML = original;
+      if (statusBox && error.message) {
+        statusBox.innerHTML = html`<div class="alert alert-danger" style="margin-top:12px">${icon('alert')} <span>${error.message}</span></div>`;
+      }
+    }
   }
 
   async function loadStatus() {
@@ -47,18 +86,20 @@
     $('#todayBadge').innerHTML = record ? App.badge(record.check_out_at ? 'CHECKED_OUT' : 'CHECKED_IN') : App.badge('PENDING', 'Not checked in');
     let action = '';
     if (!status.attendance_enabled) action = html`<div class="alert alert-warning">${icon('alert')}<span>Attendance has not been set up yet. Ask an administrator to configure the office location.</span></div>`;
-    else if (!record || !record.check_in_at) action = html`<button class="btn btn-primary" id="checkIn" type="button">${icon('pin')} Check in</button>`;
-    else if (!record.check_out_at) action = html`<button class="btn btn-primary" id="checkOut" type="button">${icon('logout')} Check out</button>`;
+    else if (!record || !record.check_in_at) action = html`<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><button class="btn btn-primary" id="checkIn" type="button">${icon('pin')} Check in</button><button class="btn btn-sm" id="checkLocBtn" type="button">${icon('search')} Check my distance</button></div><div id="proximityStatus"></div>`;
+    else if (!record.check_out_at) action = html`<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><button class="btn btn-primary" id="checkOut" type="button">${icon('logout')} Check out</button><button class="btn btn-sm" id="checkLocBtn" type="button">${icon('search')} Check my distance</button></div><div id="proximityStatus"></div>`;
     else action = html`<div class="alert alert-success">${icon('check')}<span>You have completed attendance for today. Worked ${fmt.duration(record.worked_minutes)}.</span></div>`;
     $('#today').innerHTML = html`<dl class="kv" style="margin-bottom:20px">
       <dt>Check in</dt><dd>${record ? fmt.time(record.check_in_at) : '—'}</dd>
       <dt>Late</dt><dd>${record ? lateCell(record.late_minutes) : '—'}</dd>
       <dt>Check out</dt><dd>${record && record.check_out_at ? fmt.time(record.check_out_at) : '—'}</dd>
-      <dt>Allowed distance</dt><dd>${status.attendance_enabled ? `${status.radius_meters} m from the office` : 'Not configured'}</dd>
+      <dt>Office location</dt><dd>${status.attendance_enabled ? (status.location_name || 'Designated office') : 'Not configured'}</dd>
+      <dt>Allowed distance</dt><dd>${status.attendance_enabled ? `${status.radius_meters} m from location` : 'Not configured'}</dd>
     </dl>${action}`;
-    const inBtn = $('#checkIn'), outBtn = $('#checkOut');
+    const inBtn = $('#checkIn'), outBtn = $('#checkOut'), checkLocBtn = $('#checkLocBtn');
     if (inBtn) inBtn.addEventListener('click', () => mark('check-in', inBtn));
     if (outBtn) outBtn.addEventListener('click', () => mark('check-out', outBtn));
+    if (checkLocBtn) checkLocBtn.addEventListener('click', () => checkProximity());
   }
 
   async function loadShift() {

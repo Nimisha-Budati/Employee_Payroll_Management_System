@@ -768,8 +768,9 @@ def attendance_settings(request):
     serializer = AttendanceSettingsSerializer(settings, data=request.data)
     if serializer.is_valid():
         saved = serializer.save()
+        loc_str = f' ({saved.location_name})' if saved.location_name else ''
         record_audit(request, 'UPDATE', 'AttendanceSettings', 1,
-                     f'Office location set to {saved.latitude}, {saved.longitude} (radius {saved.radius_meters} m, '
+                     f'Office location set to {saved.latitude}, {saved.longitude}{loc_str} (radius {saved.radius_meters} m, '
                      f'{"enabled" if saved.is_enabled else "disabled"}).')
         return Response(serializer.data)
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -785,6 +786,9 @@ def attendance_status(request):
         'date': today,
         'attendance_enabled': settings.is_enabled and settings.latitude is not None and settings.longitude is not None,
         'radius_meters': settings.radius_meters,
+        'latitude': float(settings.latitude) if settings.latitude is not None else None,
+        'longitude': float(settings.longitude) if settings.longitude is not None else None,
+        'location_name': getattr(settings, 'location_name', '') or '',
         'record': AttendanceRecordSerializer(record).data if record else None,
     })
 
@@ -805,7 +809,8 @@ def attendance_mark(request, action):
         return Response({'detail': 'A valid GPS location is required.'}, status=status.HTTP_400_BAD_REQUEST)
     distance = _distance_in_meters(settings.latitude, settings.longitude, latitude, longitude)
     if distance > settings.radius_meters:
-        return Response({'detail': f'You are {distance} m from the office. You must be within {settings.radius_meters} m to mark attendance.'}, status=status.HTTP_403_FORBIDDEN)
+        loc_msg = f' ({settings.location_name})' if getattr(settings, 'location_name', '') else ''
+        return Response({'detail': f'You are {distance} m from the office{loc_msg}. You must be within {settings.radius_meters} m to mark attendance.'}, status=status.HTTP_403_FORBIDDEN)
 
     today = timezone.localdate()
     record, created = AttendanceRecord.objects.get_or_create(employee=request.user, date=today)
