@@ -6,6 +6,7 @@ first calls ``GET /api/csrf/`` and sends the returned token in ``X-CSRFToken``.
 """
 
 import json
+import logging
 import secrets
 from datetime import timedelta
 
@@ -17,7 +18,9 @@ from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
 from django.core.mail import send_mail
 from django.core.validators import validate_email
-from django.db import transaction
+from django.db import connection, transaction
+
+auth_logger = logging.getLogger('accounts.auth')
 from django.http import JsonResponse
 from django.middleware.csrf import get_token
 from django.utils import timezone
@@ -52,7 +55,7 @@ def json_body(request):
 def user_for_identifier(identifier, role=None):
     if not identifier:
         return None
-    identifier = identifier.strip()
+    identifier = ' '.join(str(identifier).split())
     if role:
         match = (
             User.objects.filter(username__iexact=identifier, userprofile__role=role).first()
@@ -312,6 +315,16 @@ def login_user(request):
             status=429,
         )
 
+    db_host = connection.settings_dict.get('HOST', 'unknown')
+    db_name = connection.settings_dict.get('NAME', 'unknown')
+    user_agent = request.META.get('HTTP_USER_AGENT', 'unknown')
+    masked_id = (identifier[:2] + '***' + identifier[-2:]) if len(identifier) > 4 else '***'
+
+    auth_logger.info(
+        "[AUTH DIAG] Attempt IP=%s, DB=%s@%s, ID=%s (len=%d), Role=%s, UA=%s",
+        ip, db_name, db_host, masked_id, len(identifier), role, user_agent[:60]
+    )
+
     user_record = user_for_identifier(identifier, role=role)
     user = authenticate(
         request,
@@ -320,14 +333,30 @@ def login_user(request):
     )
     if user is None and user_record:
         user = authenticate(request, username=identifier, password=password)
+    if user is None and isinstance(password, str) and password != password.strip():
+        user = authenticate(
+            request,
+            username=user_record.username if user_record else identifier,
+            password=password.strip(),
+        )
+
     if user is None:
-        # Inactive users never authenticate; report the same generic message to avoid account enumeration.
+        pw_has_ws = password != password.strip() if isinstance(password, str) else False
+        pw_len = len(password) if isinstance(password, str) else 0
+        auth_logger.warning(
+            "[AUTH DIAG] FAILED: ID=%s (found_user=%s), pw_len=%d, pw_has_ws=%s, IP=%s",
+            masked_id, bool(user_record), pw_len, pw_has_ws, ip
+        )
         register_failure('login', ip, identifier)
         record_audit(request, 'LOGIN_FAILED', 'Account', '', f'Failed sign-in for "{identifier[:60]}".')
         return JsonResponse({'error': 'Invalid username or password'}, status=401)
 
     blocked = login_block(user, role)
     if blocked:
+        auth_logger.warning(
+            "[AUTH DIAG] BLOCKED: ID=%s, user_id=%s, actual_role=%s, requested_role=%s, reason=%s",
+            masked_id, user.pk, getattr(getattr(user, 'userprofile', None), 'role', None), role, blocked[0]
+        )
         record_audit(request, 'LOGIN_BLOCKED', 'Account', user.pk, f'Sign-in refused for {user.username}: {blocked[0]}.', actor=user)
         return JsonResponse({'error': blocked[0]}, status=blocked[1])
     profile = resolve_profile(user)
@@ -335,6 +364,7 @@ def login_user(request):
     clear_failures('login', ip, identifier)
     login(request, user)
     request.session.set_expiry(settings.SESSION_COOKIE_AGE if remember_me else 0)
+    auth_logger.info("[AUTH DIAG] SUCCESS: user=%s, role=%s, IP=%s", user.username, profile.role, ip)
     record_audit(request, 'LOGIN', 'Account', user.pk, f'{user.username} signed in as {profile.role.lower()} (password).')
 
     company = getattr(profile, 'company', None)

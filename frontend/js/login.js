@@ -58,8 +58,8 @@
   $('#loginForm').addEventListener('submit', async event => {
     event.preventDefault();
     note('loginError', '');
-    const username = $('#loginUsername').value.trim();
-    const password = $('#loginPassword').value;
+    const username = ($('#loginUsername').value || '').trim().replace(/\s+/g, ' ');
+    const password = ($('#loginPassword').value || '').replace(/[\r\n]+$/, '');
     if (!username || !password) { note('loginError', 'Please enter your username and password.'); return; }
     try {
       const data = await busy($('#loginSubmit'), 'Signing in…', () => api.post('/login/', {

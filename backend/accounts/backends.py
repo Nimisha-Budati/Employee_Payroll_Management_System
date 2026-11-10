@@ -1,8 +1,10 @@
+import logging
 from django.contrib.auth import get_user_model
 from django.contrib.auth.backends import ModelBackend
 from .models import Company
 
 User = get_user_model()
+logger = logging.getLogger('accounts.auth')
 
 
 class EmailOrUsernameModelBackend(ModelBackend):
@@ -11,7 +13,8 @@ class EmailOrUsernameModelBackend(ModelBackend):
     def authenticate(self, request, username=None, password=None, **kwargs):
         if not username or not password:
             return None
-        identifier = str(username).strip()
+        # Normalize whitespace (handles standard and unicode spaces e.g. non-breaking spaces)
+        identifier = ' '.join(str(username).split())
 
         user = None
         # 1. By exact username (case-insensitive)
@@ -36,6 +39,18 @@ class EmailOrUsernameModelBackend(ModelBackend):
             if len(candidates) == 1:
                 user = candidates[0]
 
-        if user and user.check_password(password) and self.user_can_authenticate(user):
-            return user
+        if user and self.user_can_authenticate(user):
+            # Direct password check
+            if user.check_password(password):
+                return user
+            # Fallback for mobile clipboard artifacts (trailing/leading whitespace or trailing newlines)
+            if isinstance(password, str):
+                trimmed = password.strip()
+                if trimmed != password and user.check_password(trimmed):
+                    logger.info("User authenticated via trimmed password fallback for user id=%s", user.pk)
+                    return user
+                without_newline = password.rstrip('\r\n')
+                if without_newline != password and user.check_password(without_newline):
+                    logger.info("User authenticated via newline-stripped password fallback for user id=%s", user.pk)
+                    return user
         return None

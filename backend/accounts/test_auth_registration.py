@@ -138,6 +138,58 @@ class CompanyRegistrationAndAdminAuthTests(TestCase):
         self.assertEqual(success.status_code, 200)
         self.assertEqual(success.json()['role'], 'ADMIN')
 
+    def test_login_tolerates_clipboard_trailing_spaces_and_newlines(self):
+        payload = {
+            'company_name': 'Zeta Cloud',
+            'company_email': 'contact@zetaclouddemo.com',
+            'admin_username': 'zeta_admin',
+            'admin_name': 'Zack Taylor',
+            'admin_email': 'zack@zetaclouddemo.com',
+            'password': 'ZetaPassword123!',
+            'confirm_password': 'ZetaPassword123!',
+        }
+        self.client.post('/api/companies/register/', payload, format='json')
+
+        login_client = APIClient()
+        # Trailing space from mobile clipboard
+        res_space = login_client.post('/api/login/', {
+            'username': 'zeta_admin',
+            'password': 'ZetaPassword123! ',
+            'role': 'ADMIN',
+        }, format='json')
+        self.assertEqual(res_space.status_code, 200)
+
+        login_client.post('/api/logout/')
+
+        # Trailing newline from mobile clipboard
+        res_nl = login_client.post('/api/login/', {
+            'username': 'zack@zetaclouddemo.com',
+            'password': 'ZetaPassword123!\n',
+            'role': 'ADMIN',
+        }, format='json')
+        self.assertEqual(res_nl.status_code, 200)
+
+    def test_login_normalizes_identifier_whitespace(self):
+        payload = {
+            'company_name': 'Eta Works',
+            'company_email': 'contact@etaworksdemo.com',
+            'admin_username': 'eta_admin',
+            'admin_name': 'Evan Stone',
+            'admin_email': 'evan@etaworksdemo.com',
+            'password': 'EtaPassword123!',
+            'confirm_password': 'EtaPassword123!',
+        }
+        self.client.post('/api/companies/register/', payload, format='json')
+
+        login_client = APIClient()
+        # Non-breaking space \u00a0 in identifier from copy-paste
+        res = login_client.post('/api/login/', {
+            'username': '  eta_admin\u00a0 ',
+            'password': 'EtaPassword123!',
+            'role': 'ADMIN',
+        }, format='json')
+        self.assertEqual(res.status_code, 200)
+
     def test_duplicate_company_or_admin_registration_rejected(self):
         payload = {
             'company_name': 'Echo Systems',
