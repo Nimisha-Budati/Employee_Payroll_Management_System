@@ -654,10 +654,26 @@ def document_expiry(request, pk):
 @api_view(['GET', 'PUT'])
 @permission_classes([IsAuthenticated])
 def my_profile(request):
-    profile, _ = UserProfile.objects.get_or_create(
-        user=request.user,
-        defaults={'role': 'ADMIN' if request.user.is_staff or request.user.is_superuser else 'EMPLOYEE'},
-    )
+    # Employee records are the authoritative tenant link when a legacy employee
+    # is missing its one-to-one profile. Never accept a company id from the client.
+    employee = Employee.objects.select_related('company').filter(user=request.user).first()
+    role = 'ADMIN' if request.user.is_staff or request.user.is_superuser else 'EMPLOYEE'
+    existing_profile = UserProfile.objects.filter(user=request.user).first()
+    if role == 'EMPLOYEE' and existing_profile is None and employee is None:
+        return Response(
+            {'detail': 'This account has no company-linked employee record. Ask your company administrator to assign your account before creating a profile.'},
+            status=status.HTTP_409_CONFLICT,
+        )
+    defaults = {'role': role}
+    if role == 'EMPLOYEE' and employee:
+        defaults['company'] = employee.company
+    profile = existing_profile
+    if profile is None:
+        profile, _ = UserProfile.objects.get_or_create(user=request.user, defaults=defaults)
+    if profile.role == 'EMPLOYEE' and profile.company_id is None and employee:
+        profile.company = employee.company
+        profile.phone = profile.phone or employee.phone
+        profile.save(update_fields=['company', 'phone'])
     if request.method == 'GET':
         return Response(ProfileSerializer(profile, context={'request': request}).data)
 

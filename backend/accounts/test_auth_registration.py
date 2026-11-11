@@ -293,6 +293,24 @@ class EmployeeRegistrationAndAuthTests(TestCase):
         self.assertEqual(r2.status_code, 200)
         self.assertEqual(r2.json()['username'], 'jane_doe')
 
+    def test_employee_with_employment_record_can_restore_missing_profile_at_login(self):
+        user = User.objects.create_user('legacy_employee', email='legacy@acmetest.org', password='StrongPassword123!')
+        Employee.objects.create(
+            user=user, company=self.company, employee_id='LEGACY-1', phone='9876543210',
+            department='Operations', designation='Analyst', joining_date=date(2026, 1, 1),
+        )
+
+        response = self.client.post('/api/login/', {
+            'username': 'legacy_employee', 'password': 'StrongPassword123!', 'role': 'EMPLOYEE',
+        }, format='json')
+
+        self.assertEqual(response.status_code, 200, response.json())
+        profile = UserProfile.objects.get(user=user)
+        self.assertEqual(profile.role, 'EMPLOYEE')
+        self.assertEqual(profile.company_id, self.company.pk)
+        self.assertEqual(profile.phone, '9876543210')
+        self.assertEqual(UserProfile.objects.filter(user=user).count(), 1)
+
     def test_employee_cannot_register_or_login_as_admin(self):
         # 1. Attempt register with role=ADMIN
         res = self.client.post('/api/register/', {

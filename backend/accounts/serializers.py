@@ -3,6 +3,7 @@ import re
 from django.contrib.auth.models import User
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ObjectDoesNotExist, ValidationError as DjangoValidationError
+from django.db import transaction
 from django.urls import reverse
 from django.utils import timezone
 from rest_framework import serializers
@@ -419,11 +420,13 @@ class ProfileSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError('The file content is not a valid JPG or PNG image.')
         return value
 
+    @transaction.atomic
     def update(self, instance, validated_data):
         user_data = validated_data.pop('user', {})
         for field, value in user_data.items():
             setattr(instance.user, field, value)
-        instance.user.save()
+        if user_data:
+            instance.user.save()
         return super().update(instance, validated_data)
 
 

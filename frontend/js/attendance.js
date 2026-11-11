@@ -77,59 +77,69 @@
     load();
   }
 
-  function ensureLeaflet() {
-    return new Promise((resolve, reject) => {
-      if (window.L) return resolve(window.L);
-      if (!document.querySelector('link[href*="leaflet.css"]')) {
-        const link = document.createElement('link');
-        link.rel = 'stylesheet';
-        link.href = 'vendor/leaflet/leaflet.css';
-        document.head.appendChild(link);
+  async function ensureMapLibre() {
+    const cssUrls = [
+      'https://unpkg.com/maplibre-gl@6.17.0/dist/maplibre-gl.css',
+      'https://cdn.jsdelivr.net/npm/maplibre-gl@6.17.0/dist/maplibre-gl.css',
+    ];
+    const existingCss = document.querySelector('link[data-maplibre-css]');
+    if (!existingCss || !existingCss.sheet) {
+      let loaded = existingCss && existingCss.sheet;
+      for (const href of cssUrls) {
+        if (loaded) break;
+        loaded = await new Promise(resolve => {
+          const link = existingCss || document.createElement('link');
+          link.rel = 'stylesheet';
+          link.href = href;
+          link.dataset.maplibreCss = '';
+          link.onload = () => resolve(true);
+          link.onerror = () => resolve(false);
+          if (!link.isConnected) document.head.appendChild(link);
+          // A stylesheet can load without firing if another attempt left it in the DOM.
+          if (link.sheet) resolve(true);
+        });
       }
-      const script = document.createElement('script');
-      script.src = 'vendor/leaflet/leaflet.js';
-      script.onload = () => resolve(window.L);
-      script.onerror = () => {
-        const cdn = document.createElement('script');
-        cdn.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
-        cdn.onload = () => resolve(window.L);
-        cdn.onerror = () => reject(new Error('Could not load map library.'));
-        document.head.appendChild(cdn);
-      };
-      document.head.appendChild(script);
-    });
+      if (!loaded) throw new Error('Could not load the map styles. Check your connection and retry.');
+    }
+    try {
+      return await import('https://unpkg.com/maplibre-gl@6.17.0/dist/maplibre-gl.mjs');
+    } catch (error) {
+      try {
+        return await import('https://cdn.jsdelivr.net/npm/maplibre-gl@6.17.0/dist/maplibre-gl.mjs');
+      } catch (_) {
+        throw new Error('Could not load the interactive map renderer. Check the connection to the map library CDN.');
+      }
+    }
+  }
+
+  function openFreeMapStyle() {
+    return `https://tiles.openfreemap.org/styles/${document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'positron'}`;
   }
 
   async function openSettings() {
     let s;
     try { s = await api.get('/attendance/settings/'); } catch (error) { return App.error(error); }
 
-    let L;
+    let MapLibre;
     try {
-      L = await ensureLeaflet();
+      MapLibre = await ensureMapLibre();
     } catch (err) {
       return App.toast('Could not initialize map component: ' + err.message, 'error');
     }
 
-    if (L && L.Icon && L.Icon.Default) {
-      delete L.Icon.Default.prototype._getIconUrl;
-      L.Icon.Default.mergeOptions({
-        iconRetinaUrl: 'vendor/leaflet/marker-icon-2x.png',
-        iconUrl: 'vendor/leaflet/marker-icon.png',
-        shadowUrl: 'vendor/leaflet/marker-shadow.png',
-      });
-    }
-
-    const initialLat = s.latitude ? Number(s.latitude) : 17.385044;
-    const initialLng = s.longitude ? Number(s.longitude) : 78.486671;
+    const initialLat = s.latitude != null ? Number(s.latitude) : 17.385044;
+    const initialLng = s.longitude != null ? Number(s.longitude) : 78.486671;
     const hasInitialCoords = s.latitude != null && s.longitude != null;
     let initialRadius = Number(s.radius_meters) || 100;
     let initialLocationName = s.location_name || '';
 
     let mapInstance = null;
     let markerInstance = null;
-    let circleInstance = null;
+    let popupInstance = null;
+    let mapErrorShown = false;
+    let circleData = null;
     let activeReverseGeocodeTimer = null;
+    let reverseGeocodeRequest = 0;
 
     App.modal({
       title: 'Office Attendance Location',
@@ -184,9 +194,9 @@
               <span class="hint">Employees can only check in and out when their GPS coordinates fall inside this circle.</span>
             </div>
 
-            ${field({ label: 'Latitude', name: 'latitude', type: 'number', value: s.latitude ?? '', required: true, attrs: 'id="latInput" step="any" min="-90" max="90"' })}
-            ${field({ label: 'Longitude', name: 'longitude', type: 'number', value: s.longitude ?? '', required: true, attrs: 'id="lngInput" step="any" min="-180" max="180"' })}
-            ${field({ label: 'Location name / label', name: 'location_name', type: 'text', value: initialLocationName, placeholder: 'e.g. Headquarters, Tech Park Campus', span2: true, attrs: 'id="locationNameInput"' })}
+            ${field({ label: 'Latitude', name: 'latitude', type: 'number', value: s.latitude ?? '', required: true, attrs: 'step="any" min="-90" max="90"' })}
+            ${field({ label: 'Longitude', name: 'longitude', type: 'number', value: s.longitude ?? '', required: true, attrs: 'step="any" min="-180" max="180"' })}
+            ${field({ label: 'Location name / label', name: 'location_name', type: 'text', value: initialLocationName, placeholder: 'e.g. Headquarters, Tech Park Campus', span2: true })}
             ${field({ label: 'Enable location-based attendance for this company', name: 'is_enabled', type: 'checkbox', value: s.is_enabled, span2: true })}
           </div>
 
@@ -200,9 +210,9 @@
         dialog.classList.add('map-modal');
 
         const mapEl = form.querySelector('#attendanceMap');
-        const latInput = form.querySelector('#latInput');
-        const lngInput = form.querySelector('#lngInput');
-        const locNameInput = form.querySelector('#locationNameInput');
+        const latInput = form.elements.namedItem('latitude');
+        const lngInput = form.elements.namedItem('longitude');
+        const locNameInput = form.elements.namedItem('location_name');
         const radiusInput = form.querySelector('#radiusInput');
         const radiusSlider = form.querySelector('#radiusSlider');
         const radiusDisplay = form.querySelector('#radiusValueDisplay');
@@ -220,40 +230,97 @@
         let currentRadius = initialRadius;
         let currentLocationName = initialLocationName;
 
-        mapInstance = L.map(mapEl, {
-          center: [currentLat, currentLng],
+        const makeCircle = (lat, lng, radius) => {
+          const points = [];
+          const earthRadius = 6378137;
+          const latitudeRadians = lat * Math.PI / 180;
+          for (let i = 0; i <= 64; i++) {
+            const angle = 2 * Math.PI * i / 64;
+            const pointLat = lat + (radius * Math.cos(angle) / earthRadius) * 180 / Math.PI;
+            const pointLng = lng + (radius * Math.sin(angle) / (earthRadius * Math.max(0.01, Math.cos(latitudeRadians)))) * 180 / Math.PI;
+            points.push([pointLng, pointLat]);
+          }
+          return { type: 'Feature', properties: {}, geometry: { type: 'Polygon', coordinates: [points] } };
+        };
+
+        const updateRadiusLayer = () => {
+          circleData = makeCircle(currentLat, currentLng, currentRadius);
+          if (!mapInstance || !mapInstance.isStyleLoaded()) return;
+          const source = mapInstance.getSource('attendance-radius');
+          if (source) source.setData(circleData);
+        };
+
+        const installRadiusLayer = () => {
+          if (!mapInstance.getSource('attendance-radius')) {
+            mapInstance.addSource('attendance-radius', { type: 'geojson', data: circleData || makeCircle(currentLat, currentLng, currentRadius) });
+          }
+          if (!mapInstance.getLayer('attendance-radius-fill')) {
+            mapInstance.addLayer({
+              id: 'attendance-radius-fill', type: 'fill', source: 'attendance-radius',
+              paint: { 'fill-color': '#047857', 'fill-opacity': 0.16 },
+            });
+          }
+          if (!mapInstance.getLayer('attendance-radius-outline')) {
+            mapInstance.addLayer({
+              id: 'attendance-radius-outline', type: 'line', source: 'attendance-radius',
+              paint: { 'line-color': '#047857', 'line-width': 2 },
+            });
+          }
+          mapInstance.resize();
+        };
+
+        const updatePopup = name => {
+          if (!popupInstance) return;
+          const content = document.createElement('div');
+          const heading = document.createElement('strong');
+          heading.textContent = 'Office Attendance Location';
+          const label = document.createElement('div');
+          label.textContent = name || 'Selected attendance point';
+          content.append(heading, label);
+          popupInstance.setDOMContent(content);
+        };
+
+        mapInstance = new MapLibre.Map({
+          container: mapEl,
+          style: openFreeMapStyle(),
+          center: [currentLng, currentLat],
           zoom: hasInitialCoords ? 16 : 14,
-          zoomControl: true,
-        });
-
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
           maxZoom: 19,
-          attribution: '&copy; OpenStreetMap contributors',
-        }).addTo(mapInstance);
+          attributionControl: true,
+        });
+        mapInstance.addControl(new MapLibre.NavigationControl({ showCompass: false }), 'top-left');
+        mapInstance.on('style.load', installRadiusLayer);
+        mapInstance.on('error', () => {
+          if (!mapErrorShown && dialog.isConnected) {
+            mapErrorShown = true;
+            App.toast('Map tiles could not be loaded. Check your connection and retry.', 'error');
+          }
+        });
+        const onThemeChange = () => mapInstance && mapInstance.setStyle(openFreeMapStyle());
+        document.addEventListener('themechange', onThemeChange);
+        dialog.addEventListener('close', () => {
+          document.removeEventListener('themechange', onThemeChange);
+          if (mapInstance) {
+            mapInstance.remove();
+            mapInstance = null;
+          }
+        }, { once: true });
 
-        markerInstance = L.marker([currentLat, currentLng], {
-          draggable: true,
-          autoPan: true,
-        }).addTo(mapInstance);
-
-        circleInstance = L.circle([currentLat, currentLng], {
-          radius: currentRadius,
-          color: '#047857',
-          fillColor: '#047857',
-          fillOpacity: 0.16,
-          weight: 2,
-        }).addTo(mapInstance);
-
-        markerInstance.bindPopup('<strong>Office Attendance Location</strong><br><span id="markerPopupText">' + (currentLocationName || 'Selected attendance point') + '</span>');
+        popupInstance = new MapLibre.Popup({ offset: 28 });
+        updatePopup(currentLocationName);
+        markerInstance = new MapLibre.Marker({ draggable: true, color: '#047857' })
+          .setLngLat([currentLng, currentLat])
+          .setPopup(popupInstance)
+          .addTo(mapInstance);
         if (hasInitialCoords) {
-          markerInstance.openPopup();
+          popupInstance.addTo(mapInstance);
         }
 
         setTimeout(() => {
           if (mapInstance) {
-            mapInstance.invalidateSize();
+            mapInstance.resize();
             if (hasInitialCoords) {
-              mapInstance.setView([currentLat, currentLng], 16);
+              mapInstance.jumpTo({ center: [currentLng, currentLat], zoom: 16 });
             }
           }
         }, 150);
@@ -271,16 +338,14 @@
             currentLocationName = name;
             locNameInput.value = name;
             locDisplay.textContent = name;
-            const popupEl = document.getElementById('markerPopupText');
-            if (popupEl) popupEl.textContent = name;
+            updatePopup(name);
           }
 
-          markerInstance.setLatLng([currentLat, currentLng]);
-          circleInstance.setLatLng([currentLat, currentLng]);
-          circleInstance.setRadius(currentRadius);
+          markerInstance.setLngLat([currentLng, currentLat]);
+          updateRadiusLayer();
 
           if (zoomLevel) {
-            mapInstance.setView([currentLat, currentLng], zoomLevel);
+            mapInstance.flyTo({ center: [currentLng, currentLat], zoom: zoomLevel });
           }
 
           presetPills.forEach(p => {
@@ -289,45 +354,49 @@
 
           if (shouldReverse) {
             clearTimeout(activeReverseGeocodeTimer);
+            const requestId = ++reverseGeocodeRequest;
+            locDisplay.textContent = `${currentLat.toFixed(6)}, ${currentLng.toFixed(6)}`;
             activeReverseGeocodeTimer = setTimeout(async () => {
-              locDisplay.textContent = 'Identifying place…';
               try {
                 const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${currentLat}&lon=${currentLng}&zoom=18&addressdetails=1`, {
                   headers: { 'Accept': 'application/json' }
                 });
-                if (res.ok) {
-                  const data = await res.json();
-                  if (data && data.display_name) {
-                    const cleanName = data.display_name;
-                    locDisplay.textContent = cleanName;
-                    if (!locNameInput.value || locNameInput.value === initialLocationName) {
-                      locNameInput.value = cleanName.split(',').slice(0, 3).join(',').trim();
-                    }
-                    const popupEl = document.getElementById('markerPopupText');
-                    if (popupEl) popupEl.textContent = locNameInput.value || cleanName;
-                  }
+                if (!res.ok) throw new Error('Reverse geocoding failed');
+                const data = await res.json();
+                if (requestId !== reverseGeocodeRequest) return;
+                if (!data || !data.display_name) throw new Error('No place name found');
+                const cleanName = data.display_name;
+                locDisplay.textContent = cleanName;
+                if (!locNameInput.value || locNameInput.value === initialLocationName) {
+                  locNameInput.value = cleanName.split(',').slice(0, 3).join(',').trim();
                 }
+                updatePopup(locNameInput.value || cleanName);
               } catch (_) {
-                locDisplay.textContent = `${currentLat.toFixed(6)}, ${currentLng.toFixed(6)}`;
+                if (requestId === reverseGeocodeRequest) {
+                  locDisplay.textContent = `${currentLat.toFixed(6)}, ${currentLng.toFixed(6)}`;
+                  updatePopup(locNameInput.value || 'Selected attendance point');
+                }
               }
             }, 600);
           }
         }
 
         mapInstance.on('click', e => {
-          updateUI(e.latlng.lat, e.latlng.lng, currentRadius, null, true);
+          updateUI(e.lngLat.lat, e.lngLat.lng, currentRadius, null, true);
         });
 
-        markerInstance.on('drag', e => {
-          const pos = e.target.getLatLng();
-          circleInstance.setLatLng(pos);
+        markerInstance.on('drag', () => {
+          const pos = markerInstance.getLngLat();
+          currentLat = pos.lat;
+          currentLng = pos.lng;
+          updateRadiusLayer();
           coordsDisplay.textContent = `${pos.lat.toFixed(6)}, ${pos.lng.toFixed(6)}`;
           latInput.value = pos.lat.toFixed(6);
           lngInput.value = pos.lng.toFixed(6);
         });
 
-        markerInstance.on('dragend', e => {
-          const pos = e.target.getLatLng();
+        markerInstance.on('dragend', () => {
+          const pos = markerInstance.getLngLat();
           updateUI(pos.lat, pos.lng, currentRadius, null, true);
         });
 
@@ -337,7 +406,7 @@
           radiusInput.value = r;
           radiusSlider.value = Math.min(1500, r);
           radiusDisplay.textContent = `${r} m`;
-          circleInstance.setRadius(r);
+          updateRadiusLayer();
           presetPills.forEach(p => p.classList.toggle('active', Number(p.dataset.radius) === r));
         };
 
@@ -359,30 +428,65 @@
         lngInput.addEventListener('change', onManualCoordChange);
 
         fitBtn.addEventListener('click', () => {
-          if (circleInstance && mapInstance) {
-            mapInstance.fitBounds(circleInstance.getBounds(), { padding: [40, 40] });
+          if (mapInstance) {
+            const bounds = new MapLibre.LngLatBounds();
+            makeCircle(currentLat, currentLng, currentRadius).geometry.coordinates[0].forEach(point => bounds.extend(point));
+            mapInstance.fitBounds(bounds, { padding: 40 });
           }
         });
 
         useCurrentBtn.addEventListener('click', () => {
-          if (!navigator.geolocation) return App.toast('Your browser does not support geolocation.', 'error');
+          if (!window.isSecureContext) {
+            App.toast('Device location requires a secure connection. Open PayrollPro over HTTPS or localhost.', 'error');
+            return;
+          }
+          if (!navigator.geolocation) {
+            App.toast('This browser does not provide location access. Use the map or enter coordinates manually.', 'error');
+            return;
+          }
           useCurrentBtn.disabled = true;
           const origHtml = useCurrentBtn.innerHTML;
           useCurrentBtn.innerHTML = '<span class="spinner"></span> Detecting GPS…';
-          navigator.geolocation.getCurrentPosition(
-            p => {
-              useCurrentBtn.disabled = false;
-              useCurrentBtn.innerHTML = origHtml;
-              updateUI(p.coords.latitude, p.coords.longitude, currentRadius, null, true, 17);
-              App.toast('Location updated from device GPS.');
-            },
-            err => {
-              useCurrentBtn.disabled = false;
-              useCurrentBtn.innerHTML = origHtml;
-              App.toast('Could not detect GPS location (' + (err.message || 'permission denied') + ').', 'error');
-            },
-            { enableHighAccuracy: true, timeout: 12000 }
-          );
+          const restoreButton = () => {
+            if (!useCurrentBtn.isConnected) return;
+            useCurrentBtn.disabled = false;
+            useCurrentBtn.innerHTML = origHtml;
+          };
+          const locationErrorMessage = error => {
+            if (error && error.code === 1) return 'Location permission is blocked. Allow location access for this site in your browser, then try again.';
+            if (error && error.code === 2) return 'Your device could not determine a location. Turn on device location services or select a point on the map.';
+            if (error && error.code === 3) return 'Location took too long. Try again with device location enabled, or select a point on the map.';
+            return 'Could not detect your location. Check browser location permission or select a point on the map.';
+          };
+
+          const onLocationSuccess = position => {
+            restoreButton();
+            if (!dialog.isConnected) return;
+            if (!Number.isFinite(position.coords.latitude) || !Number.isFinite(position.coords.longitude)) {
+              App.toast('Your device returned invalid coordinates. Select a point on the map instead.', 'error');
+              return;
+            }
+            updateUI(position.coords.latitude, position.coords.longitude, currentRadius, null, true, 17);
+            const accuracy = Number.isFinite(position.coords.accuracy) ? ` (accuracy about ${Math.round(position.coords.accuracy)} m)` : '';
+            App.toast('Location updated from this device' + accuracy + '.');
+          };
+          const onLocationError = error => {
+            restoreButton();
+            if (dialog.isConnected) App.toast(locationErrorMessage(error), 'error');
+          };
+
+          try {
+            // Always ask the device for a fresh fix. A cached position can point
+            // to the previous place after the user has moved or repositioned the map.
+            navigator.geolocation.getCurrentPosition(
+              onLocationSuccess,
+              onLocationError,
+              { enableHighAccuracy: true, timeout: 45000, maximumAge: 0 }
+            );
+          } catch (error) {
+            restoreButton();
+            App.toast(locationErrorMessage(error), 'error');
+          }
         });
 
         let searchDebounceTimer = null;
@@ -452,14 +556,17 @@
         });
       },
       onSubmit: async (formData, ctx) => {
-        const lat = formData.get('latitude');
-        const lng = formData.get('longitude');
-        const radius = formData.get('radius_meters');
+        const lat = Number(formData.get('latitude'));
+        const lng = Number(formData.get('longitude'));
+        const radius = Number(formData.get('radius_meters'));
         const locationName = (formData.get('location_name') || '').trim();
         const isEnabled = formData.get('is_enabled') === 'on';
 
-        if (!lat || !lng) {
-          throw new Error('Please select an office location on the map.');
+        if (!Number.isFinite(lat) || !Number.isFinite(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+          throw new Error('Choose a valid office location on the map or enter valid latitude and longitude.');
+        }
+        if (!Number.isInteger(radius) || radius < 10 || radius > 10000) {
+          throw new Error('Attendance radius must be a whole number between 10 and 10,000 meters.');
         }
 
         await api.put('/attendance/settings/', {

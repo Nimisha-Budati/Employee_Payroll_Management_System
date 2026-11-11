@@ -8,7 +8,7 @@ from django.test import TestCase
 from rest_framework.test import APIClient
 
 from .test_utils import test_company
-from .models import Announcement, AttendanceSettings, ChatConversation, ChatMessage, Employee, EmployeeDocument, LeaveRequest, Notification, UserProfile
+from .models import Announcement, AttendanceSettings, ChatConversation, ChatMessage, Company, Employee, EmployeeDocument, LeaveRequest, Notification, UserProfile
 
 
 class RoleBasedAccessTests(TestCase):
@@ -32,6 +32,7 @@ class RoleBasedAccessTests(TestCase):
         self.client.force_authenticate(self.employee)
         response = self.client.get('/api/employees/')
         self.assertEqual(response.status_code, 403)
+
 
     def test_admin_can_access_employee_management(self):
         self.client.force_authenticate(self.admin)
@@ -77,6 +78,104 @@ class RoleBasedAccessTests(TestCase):
         self.client.force_authenticate(self.employee)
         response = self.client.put(f'/api/leaves/{self.leave.id}/status/', {'status': 'APPROVED'}, format='json')
         self.assertEqual(response.status_code, 403)
+
+
+class ProfileAddressUpdateTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.user = User.objects.create_user('profile-address-user', password='SafePass123!', email='profile-address@example.com')
+        self.company = test_company()
+        self.profile = UserProfile.objects.create(user=self.user, role='EMPLOYEE', company=self.company)
+        self.client.force_authenticate(self.user)
+
+    def test_profile_address_is_saved_and_returned_after_reload(self):
+        address = '42 Example Road, Hyderabad'
+        response = self.client.put('/api/profile/', {'address': address}, format='json')
+
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(response.data['address'], address)
+        self.profile.refresh_from_db()
+        self.assertEqual(self.profile.address, address)
+
+        reloaded = self.client.get('/api/profile/')
+        self.assertEqual(reloaded.status_code, 200)
+        self.assertEqual(reloaded.data['address'], address)
+
+    def test_missing_profile_is_created_with_employee_company_once(self):
+        company = test_company()
+        user = User.objects.create_user('missing-profile-employee', password='SafePass123!', email='missing-profile@example.com')
+        employee = Employee.objects.create(
+            employee_id='EMP-MISSING', phone='9876543210', department='Operations', designation='Analyst',
+            joining_date=date(2026, 1, 1), user=user, company=company,
+        )
+        self.client.force_authenticate(user)
+
+        first = self.client.get('/api/profile/')
+        second = self.client.get('/api/profile/')
+
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual(second.status_code, 200)
+        profile = UserProfile.objects.get(user=user)
+        self.assertEqual(profile.role, 'EMPLOYEE')
+        self.assertEqual(profile.company_id, employee.company_id)
+        self.assertEqual(UserProfile.objects.filter(user=user).count(), 1)
+
+    def test_missing_profile_without_tenant_link_is_not_assigned_to_a_guessed_company(self):
+        user = User.objects.create_user('unassigned-profile-user', password='SafePass123!', email='unassigned@example.com')
+        self.client.force_authenticate(user)
+
+        response = self.client.get('/api/profile/')
+
+        self.assertEqual(response.status_code, 409)
+        self.assertFalse(UserProfile.objects.filter(user=user).exists())
+
+    def test_profile_endpoint_never_changes_role_or_company_from_payload(self):
+        other_company = Company.objects.create(name='Other profile tenant', email='other-profile-tenant@example.com')
+        other_user = User.objects.create_user('other-profile-user', password='SafePass123!', email='other-profile@example.com')
+        other_profile = UserProfile.objects.create(user=other_user, role='EMPLOYEE', company=other_company)
+        response = self.client.put('/api/profile/', {
+            'address': 'Updated address', 'role': 'ADMIN', 'company_id': other_company.pk,
+            'user_id': other_user.pk,
+        }, format='json')
+
+        self.assertEqual(response.status_code, 200, response.data)
+        self.profile.refresh_from_db()
+        self.assertEqual(self.profile.role, 'EMPLOYEE')
+        self.assertEqual(self.profile.company_id, self.company.pk)
+        self.assertEqual(self.profile.address, 'Updated address')
+        other_profile.refresh_from_db()
+        self.assertEqual(other_profile.address, '')
+
+    def test_unauthenticated_user_cannot_create_or_update_profile(self):
+        unauthenticated = APIClient()
+        user = User.objects.create_user('unauth-profile-user', password='SafePass123!', email='unauth-profile@example.com')
+
+        response = unauthenticated.put('/api/profile/', {'address': 'Should not save'}, format='json')
+
+        self.assertIn(response.status_code, (401, 403))
+        self.assertFalse(UserProfile.objects.filter(user=user).exists())
+
+    def test_invalid_email_does_not_partially_update_profile(self):
+        response = self.client.put('/api/profile/', {
+            'email': 'not-an-email', 'address': 'Should roll back',
+        }, format='json')
+
+        self.assertEqual(response.status_code, 400)
+        self.profile.refresh_from_db()
+        self.assertEqual(self.profile.address, '')
+
+    def test_admin_can_update_own_profile(self):
+        admin = User.objects.create_user('profile-admin', password='SafePass123!', email='profile-admin@example.com', is_staff=True)
+        admin_profile = UserProfile.objects.create(user=admin, role='ADMIN', company=test_company())
+        self.client.force_authenticate(admin)
+
+        response = self.client.put('/api/profile/', {'first_name': 'Payroll', 'address': 'Admin address'}, format='json')
+
+        self.assertEqual(response.status_code, 200, response.data)
+        admin.refresh_from_db()
+        admin_profile.refresh_from_db()
+        self.assertEqual(admin.first_name, 'Payroll')
+        self.assertEqual(admin_profile.address, 'Admin address')
 
 
 class PublicAccountFlowTests(TestCase):

@@ -31,7 +31,7 @@ from rest_framework.decorators import api_view
 from rest_framework.response import Response
 
 from .audit import record_audit
-from .models import (AttendanceSettings, Company, LeavePolicySettings, LeaveType, OnboardingSettings,
+from .models import (AttendanceSettings, Company, Employee, LeavePolicySettings, LeaveType, OnboardingSettings,
                      PasswordResetOTP, ReminderSettings, UserProfile)
 from .notifications import notify_user
 from .throttling import clear_failures, client_ip, is_locked, register_failure
@@ -95,10 +95,23 @@ def password_error(password, user=None):
 
 
 def resolve_profile(user):
-    """The user's profile; accounts made with ``createsuperuser`` get an ADMIN profile on first use."""
+    """Resolve or safely restore a profile from the authenticated account's existing records."""
     profile = UserProfile.objects.filter(user=user).first()
-    if profile is None and (user.is_staff or user.is_superuser):
-        profile = UserProfile.objects.create(user=user, role='ADMIN')
+    employee = Employee.objects.select_related('company').filter(user=user).first()
+    if profile is None:
+        if not (user.is_staff or user.is_superuser or employee):
+            return None
+        role = 'ADMIN' if user.is_staff or user.is_superuser else 'EMPLOYEE'
+        defaults = {'role': role}
+        if role == 'EMPLOYEE' and employee:
+            defaults['company'] = employee.company
+            defaults['phone'] = employee.phone
+        profile, _ = UserProfile.objects.get_or_create(user=user, defaults=defaults)
+    elif profile.role == 'EMPLOYEE' and profile.company_id is None and employee:
+        # Existing Google/legacy employee profiles may predate their Employee row.
+        profile.company = employee.company
+        profile.phone = profile.phone or employee.phone
+        profile.save(update_fields=['company', 'phone'])
     return profile
 
 
